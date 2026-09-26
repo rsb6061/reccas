@@ -578,4 +578,4 @@ export default {async fetch(request,env){
   var rp=await requestPage(env,slug);if(rp)return rp;
   var red=await env.DB.prepare("SELECT to_slug FROM slug_redirects WHERE from_slug=? LIMIT 1").bind(slug).first();if(red&&red.to_slug)return Response.redirect("https://reccas.com/"+red.to_slug,301);
   return page(path,"Not found","<main class='wrap'><section class='hero'><h1>Page not found</h1><p><a href='/guides'>Browse Reccas guides →</a></p></section></main>","Page not found",404,"noindex, follow");
-}}`;
+}}
