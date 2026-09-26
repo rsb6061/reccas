@@ -1,0 +1,14 @@
+name = "reccas"
+main = "src/index.js"
+compatibility_date = "2026-09-21"
+compatibility_flags = ["nodejs_compat"]
+
+routes = [
+  { pattern = "reccas.com/*", zone_name = "reccas.com" },
+  { pattern = "www.reccas.com/*", zone_name = "reccas.com" }
+]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reccas"
+database_id = "f06da302-549f-4059-a8bd-39956188c1d8"
