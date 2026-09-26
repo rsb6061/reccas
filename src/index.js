@@ -433,19 +433,48 @@ async function requestPage(env,slug){
   var viewTrack="<script>(function(){try{var k='reccas_session_id',s=localStorage.getItem(k);if(!s){s=crypto.randomUUID();localStorage.setItem(k,s)}navigator.sendBeacon('/_api/requests/view',new Blob([JSON.stringify({requestId:"+JSON.stringify(String(r.id))+",sessionId:s,referrer:document.referrer||null})],{type:'application/json'}))}catch(_){}})();</script>";
   return page("/"+slug,r.title,"<main class='wrap'><section class='hero'><span class='eyebrow'>Reccas guide</span><h1>"+esc(r.title)+"</h1><p>"+esc(r.intro_text||r.description||"")+"</p></section><section class='section'><h2>Recommended picks</h2><div class='shopgrid'>"+productHtml+"</div></section></main>"+viewTrack,guideMetaDescription(r),200,null,{kind:"article",headline:r.title,published:r.created_at,modified:r.last_activity_at||r.created_at,breadcrumb:r.title});
 }
+function catalogNeedle(v){
+  var stop=new Set(["the","for","women","womens","woman","regular","classic","in","and","with","of"]);
+  return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(/\s+/).filter(function(x){return x.length>2&&!stop.has(x)}).slice(0,3);
+}
+async function enrichStaticPick(env,pick){
+  var x=Object.assign({},pick),tokens=catalogNeedle(x.catalogQuery||x.name),pattern="%"+tokens.join("%")+"%",brand="%"+String(x.brand||"").toLowerCase().replace(/[^a-z0-9]+/g,"%")+"%";
+  if(!tokens.length)return x;
+  var base="SELECT p.id,p.title,p.price,p.image_url,p.canonical_url,b.name brand_name,(SELECT po.affiliate_url FROM product_offers po WHERE po.product_id=p.id AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL ORDER BY po.commission_rate DESC LIMIT 1) affiliate_url FROM products p LEFT JOIN brands b ON b.id=p.brand_id WHERE p.is_product_page_live=1 AND lower(p.title) LIKE ?";
+  var row=null;
+  try{row=await env.DB.prepare(base+" AND lower(COALESCE(b.name,'')) LIKE ? ORDER BY p.updated_at DESC LIMIT 1").bind(pattern,brand).first()}catch(_){}
+  if(!row){try{row=await env.DB.prepare(base+" ORDER BY p.updated_at DESC LIMIT 1").bind(pattern).first()}catch(_){}}
+  if(row){x.productId=row.id;x.price=row.price==null?x.price:Number(row.price);x.imageUrl=row.image_url||x.imageUrl;x.shopUrl=row.affiliate_url||row.canonical_url||x.shopUrl;x._catalog=true}
+  return x;
+}
 async function sourced(env,slug){
-  var row=await env.DB.prepare("SELECT json FROM sourced_shopping_edits WHERE slug=? LIMIT 1").bind(slug).first();if(!row)return null;
-  var e=JSON.parse(row.json),totalSources=e.picks.reduce(function(n,x){return n+(x.evidence||[]).length},0),cards=e.picks.map(function(x){
-    var track="/_api/out?edit="+encodeURIComponent(slug)+"&to="+encodeURIComponent(x.shopUrl);
-    var ev=(x.evidence||[]).map(function(z){return "<a class='editSource' href='"+esc(z.url)+"' target='_blank' rel='noreferrer'><strong>"+esc(z.source)+"</strong> · "+esc(z.label)+" ↗</a>"}).join("");
-    var img="/_api/edit-image?slug="+encodeURIComponent(slug)+"&rank="+encodeURIComponent(x.rank);
-    return "<article class='editPick'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span><img src='"+img+"' alt='"+esc(x.brand+" "+x.name)+"' loading='"+(x.rank===1?"eager":"lazy")+"'></div><div class='editCopy'><div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div><span class='editPrice'>"+esc(x.price)+"</span></div><div class='editLive'>Still shoppable · "+esc((x.evidence||[]).length)+" recommendation source"+((x.evidence||[]).length===1?"":"s")+"</div><p class='editSummary'>"+esc(x.summary)+"</p><div class='editSources'>"+ev+"</div><p class='editNote'><strong>Worth knowing:</strong> "+esc(x.fitNote)+"</p><div class='editActions'><a class='btn' href='"+track+"' target='_blank' rel='sponsored noreferrer'>Shop "+esc(x.price)+"</a></div></div></article>";
+  var row=await env.DB.prepare("SELECT json FROM sourced_shopping_edits WHERE slug=? LIMIT 1").bind(slug).first(),isStatic=false,e;
+  if(row){try{e=JSON.parse(row.json)}catch(_){return null}}
+  else if(STATIC_EDITS[slug]){e=JSON.parse(JSON.stringify(STATIC_EDITS[slug]));isStatic=true}
+  else return null;
+  if(!Array.isArray(e.picks))e.picks=[];
+  if(isStatic){
+    var enriched=[];
+    for(var pi=0;pi<e.picks.length;pi++)enriched.push(await enrichStaticPick(env,e.picks[pi]));
+    e.picks=enriched;
+  }
+  var totalSources=e.picks.reduce(function(n,x){return n+(x.evidence||[]).length},0),multiSource=e.picks.filter(function(x){return (x.evidence||[]).length>=2}).length;
+  var cards=e.picks.map(function(x){
+    var evidence=x.evidence||[],fallback=evidence[0]&&evidence[0].url||null,dest=x.shopUrl||fallback,track=dest?"/_api/out?edit="+encodeURIComponent(slug)+"&to="+encodeURIComponent(dest):"#";
+    var ev=evidence.map(function(z){return "<a class='editSource' href='"+esc(z.url)+"' target='_blank' rel='noreferrer'><strong>"+esc(z.source)+"</strong> · "+esc(z.label)+" ↗</a>"}).join("");
+    var img=isStatic?(x.imageUrl||null):"/_api/edit-image?slug="+encodeURIComponent(slug)+"&rank="+encodeURIComponent(x.rank);
+    var visual=img?"<img src='"+esc(img)+"' alt='"+esc(x.brand+" "+x.name)+"' loading='"+(x.rank===1?"eager":"lazy")+"'>":"<div class='editVisualFallback'>"+esc(x.brand+" "+x.name)+"</div>";
+    var price=x.price==null||x.price===""?"":(typeof x.price==="number"?money(x.price):String(x.price));
+    var action=x._catalog?"Shop"+(price?" "+esc(price):""):"View source",live=x._catalog?"Matched to a live product":"Editorially recommended";
+    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+visual+"</div><div class='editCopy'><div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div>"+(price?"<span class='editPrice'>"+esc(price)+"</span>":"")+"</div><div class='editLive'>"+esc(live)+" · "+esc(evidence.length)+" recommendation source"+(evidence.length===1?"":"s")+"</div><p class='editSummary'>"+esc(x.summary||"")+"</p><div class='editSources'>"+ev+"</div><p class='editNote'><strong>Worth knowing:</strong> "+esc(x.fitNote||"Check current sizing, materials and availability before buying.")+"</p><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='sponsored noreferrer'>"+action+"</a>":"")+"</div></div></article>";
   }).join("");
-  var metrics="<div class='editMetrics'><span><strong>"+esc(e.picks.length)+"</strong> live picks</span><span><strong>"+esc(totalSources)+"</strong> sourced mentions</span><span><strong>"+esc(e.checkedLabel||"Sep 2026")+"</strong> last checked</span></div>";
-  var intro="<section class='editIntro'><div><span class='eyebrow'>Why this is different</span><h2>Consensus, with receipts.</h2></div><p>Every recommendation links back to the writer or publication that made it. Reccas looks for attributable picks, then checks the product against the actual shopping constraint.</p></section>";
-  var method="<section class='editMethod'><span class='eyebrow'>How Reccas built this guide</span><h2>What counts as a recommendation?</h2><p>"+esc(e.freshnessCopy||"The product must still have a live shopping route and satisfy the stated category, price, or use-case constraint when Reccas checks it.")+" Reccas may earn a commission from some shopping links.</p></section>";
-  var socialImage=e.picks&&e.picks[0]?"https://reccas.com/_api/edit-image?slug="+encodeURIComponent(slug)+"&rank="+encodeURIComponent(e.picks[0].rank):null;
-  return page("/"+slug,e.seoTitle||e.title,"<main class='wrap'><section class='hero editHero'><span class='eyebrow'>Reccas guide</span><h1>"+esc(e.title)+"</h1><p>"+esc(e.deck||e.description)+"</p>"+metrics+"</section>"+intro+"<section class='editList'>"+cards+"</section>"+method+"</main>",e.description||e.deck||e.title,200,null,{kind:"article",headline:e.title,image:socialImage,breadcrumb:e.title});
+  var metrics="<div class='editMetrics'><span><strong>"+esc(e.picks.length)+"</strong> focused picks</span><span><strong>"+esc(totalSources)+"</strong> sourced mentions</span><span><strong>"+esc(e.checkedLabel||"Sep 2026")+"</strong> last checked</span></div>";
+  var headline=multiSource>=Math.ceil(e.picks.length/2)?"Consensus, with receipts.":"Editor-backed, with receipts.";
+  var intro="<section class='editIntro'><div><span class='eyebrow'>Why this is different</span><h2>"+headline+"</h2></div><p>Every recommendation links back to the editor, tester or publication that made it. Reccas narrows the evidence to a small number of useful picks, then checks the actual shopping constraint and flags the caveats.</p></section>";
+  var method="<section class='editMethod'><span class='eyebrow'>How Reccas built this guide</span><h2>What counts as a recommendation?</h2><p>"+esc(e.freshnessCopy||"The product must still satisfy the stated category, price, or use-case constraint when Reccas checks it.")+" Reccas may earn a commission from some shopping links.</p></section>";
+  var first=e.picks&&e.picks[0],socialImage=first&&(isStatic?first.imageUrl:"https://reccas.com/_api/edit-image?slug="+encodeURIComponent(slug)+"&rank="+encodeURIComponent(first.rank))||null;
+  var listSchema={"@type":"ItemList",name:e.title,itemListElement:e.picks.map(function(x,i){return{"@type":"ListItem",position:i+1,name:String(x.brand+" "+x.name),url:"https://reccas.com/"+slug+"#pick-"+String(x.rank||i+1)}})};
+  return page("/"+slug,e.seoTitle||e.title,"<main class='wrap'><section class='hero editHero'><span class='eyebrow'>Reccas recommendation</span><h1>"+esc(e.title)+"</h1><p>"+esc(e.deck||e.description)+"</p>"+metrics+"</section>"+intro+"<section class='editList'>"+cards+"</section>"+method+"</main>",e.description||e.deck||e.title,200,null,{kind:"article",headline:e.title,image:socialImage,breadcrumb:e.title,schema:[listSchema]});
 }
 async function editImage(request,env){
   var u=new URL(request.url),slug=u.searchParams.get("slug"),rank=Number(u.searchParams.get("rank"));if(!slug||!rank)return new Response("Bad image request",{status:400});
@@ -473,8 +502,8 @@ async function sitemap(env){
   var reqs=await all(env.DB,"SELECT id,slug,COALESCE(last_activity_at,created_at) lastmod FROM requests WHERE slug IS NOT NULL AND slug NOT LIKE 'archived--%' ORDER BY slug");
   var tags=await all(env.DB,"SELECT t.slug,MAX(r.last_activity_at) lastmod,COUNT(*) n FROM tags t JOIN request_tags rt ON rt.tag_id=t.id JOIN requests r ON r.id=rt.request_id AND r.status='open' WHERE t.is_indexable=1 GROUP BY t.id,t.slug HAVING COUNT(*)>=3");
   var events=await all(env.DB,"SELECT event_type,MAX(last_activity_at) lastmod FROM requests WHERE event_type IS NOT NULL GROUP BY event_type");
-  var staticPaths=["/","/about","/press","/developers","/privacy","/guides","/what-to-wear-by-temperature","/capsule-wardrobes","/wedding-guest-dresses-by-color","/travel-packing-guides","/outfit-formulas","/best-ballet-flats-under-250"];
-  var editRows=await all(env.DB,"SELECT slug FROM sourced_shopping_edits ORDER BY slug");editRows.forEach(function(x){staticPaths.push("/"+x.slug)});
+  var staticPaths=["/","/about","/press","/developers","/privacy","/guides","/recommendations","/what-to-wear-by-temperature","/capsule-wardrobes","/wedding-guest-dresses-by-color","/travel-packing-guides","/outfit-formulas","/best-ballet-flats-under-250"];
+  var editRows=await all(env.DB,"SELECT slug FROM sourced_shopping_edits ORDER BY slug");editRows.forEach(function(x){staticPaths.push("/"+x.slug)});Object.keys(STATIC_EDITS).forEach(function(slug){staticPaths.push("/"+slug)});
   var set=new Set(staticPaths),entries=[];
   staticPaths.forEach(function(p){if(set.has(p)){entries.push({p:p,last:"2026-09-25"});set.delete(p)}});
   tags.forEach(function(x){entries.push({p:"/tags/"+x.slug,last:x.lastmod})});
@@ -802,7 +831,8 @@ export default {async fetch(request,env){
   if(path==="/wardrobe/generate"&&request.method==="POST")return generateWardrobe(request,env);
   if(path==="/")return home(env);
   if(path==="/guides")return guides(env);
-  if(path==="/shopping-edits")return Response.redirect("https://reccas.com/guides",301);
+  if(path==="/recommendations")return recommendations(env);
+  if(path==="/shopping-edits")return Response.redirect("https://reccas.com/recommendations",301);
   if(path.indexOf("/r/")===0&&path.length>3)return Response.redirect("https://reccas.com/"+path.slice(3),301);
   if(path==="/login"||path==="/signup")return loginPage(path);
   if(path==="/wardrobe")return wardrobePage(request,env);
