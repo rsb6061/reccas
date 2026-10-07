@@ -97,7 +97,8 @@ async function insertDynamic(env,table,info,map){
   var u=usableMap(info,map);if(u.missing.length)return{ok:false,missing:u.missing};
   var cols=Object.keys(u.row);if(!cols.length)return{ok:false,missing:["no writable columns"]};
   var sql="INSERT INTO "+safeIdent(table)+" ("+cols.map(safeIdent).join(",")+") VALUES ("+cols.map(function(){return"?"}).join(",")+")";
-  var st=env.DB.prepare(sql).bind.apply(env.DB.prepare(sql),cols.map(function(k){return u.row[k]}));
+  var st=env.DB.prepare(sql),vals=cols.map(function(k){return u.row[k]});
+  st=st.bind.apply(st,vals);
   var r=await st.run();return{ok:true,id:r&&r.meta&&r.meta.last_row_id!=null?r.meta.last_row_id:null};
 }
 async function updateDynamic(env,table,info,map,whereSql,whereArgs){
@@ -111,7 +112,7 @@ async function updateDynamic(env,table,info,map,whereSql,whereArgs){
 function bestOfficialOffer(product,brand){
   var official=domainOnly(brand.website),offers=(product&&product.offers||[]).filter(function(o){
     if(!o||!o.url||Number(o.max_commission_rate||0)<=0)return false;
-    var d=domainOnly(o.domain||"");
+    var d=domainOnly(o.domain||o.url||"");
     return official&&d&&(d===official||d.endsWith("."+official)||official.endsWith("."+d));
   });
   offers.sort(function(a,b){
