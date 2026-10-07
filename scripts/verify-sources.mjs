@@ -24,11 +24,11 @@ export function mentions(pageText, brand, name) {
   if (!text || !want.length) return false;
   if (b && text.indexOf(b) < 0 && text.indexOf(b.replace(/ /g, "")) < 0) return false;
   const need = Math.max(1, Math.ceil(want.length * 0.7));
-  for (const anchor of want) {
+  for (const anchor of want.concat(want.map((t) => t.slice(0, 5)))) {
     let at = text.indexOf(anchor);
     while (at >= 0) {
-      const win = text.slice(Math.max(0, at - 400), at + 400);
-      if (want.filter((t) => win.indexOf(t) >= 0).length >= need) return true;
+      const win = text.slice(Math.max(0, at - 400), at + 400), joined = win.replace(/ /g, "");
+      if (want.filter((t) => win.indexOf(t) >= 0 || joined.indexOf(t) >= 0).length >= need) return true;
       at = text.indexOf(anchor, at + anchor.length);
     }
   }
