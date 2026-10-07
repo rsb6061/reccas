@@ -19,3 +19,13 @@ GitHub + Cloudflare are canonical. Do not reintroduce Floot as a runtime or depl
 
 ## Workflow
 Changes go ChatGPT -> GitHub -> Cloudflare. Floot is legacy migration source only and must not be used for ongoing code or deployments.
+
+## Deployment
+Pushes to `main` deploy through `.github/workflows/deploy.yml` (wrangler, GitHub Actions). Builds use `npm ci`, so any dependency change must update `package-lock.json`.
+
+## Recommendation counting
+- `src/consensus.js` owns the corpus, counting rules and the Best of Fashion, product, source and methodology pages.
+- A product's count is its number of distinct independent sources. Brand pages, retailer listings and customer reviews are references and are never counted.
+- A category has a winner only at 3 or more independent sources. Best of Fashion lives at the timeless URL `/recommendations`.
+- Near-duplicate guides are merged through `GUIDE_REDIRECTS`; legacy outfit and packing pages stay reachable but are noindexed and out of the sitemap.
+- A daily cron logs when each recommendation was first and last seen (`mention_observations`) and live catalog prices (`price_observations`).

@@ -13,3 +13,6 @@ routes = [
 binding = "DB"
 database_name = "reccas"
 database_id = "f06da302-549f-4059-a8bd-39956188c1d8"
+
+[triggers]
+crons = ["17 9 * * *"]
