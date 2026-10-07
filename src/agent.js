@@ -20,6 +20,7 @@ export const AGENT_TOOLS = [
   {name: "get_category", title: "Best of Fashion category", description: "The ranked products for one Best of Fashion category, such as 'best white t-shirts for women', with the winner if one has at least three independent sources and the sources behind every product.", inputSchema: {type: "object", properties: {category: {type: "string", description: "Category name, slug or search words"}}, required: ["category"], additionalProperties: false}},
   {name: "get_product_recommendations", title: "Who recommends a product", description: "Every source that recommends a specific product: publication, writer where known, how they described it, when the source was last updated, and a link to the original. Use for 'who recommends X' or 'is X still recommended'.", inputSchema: {type: "object", properties: {product: {type: "string", description: "Brand and product name"}}, required: ["product"], additionalProperties: false}},
   {name: "get_source_recommendations", title: "What a source recommends", description: "The products a given publication or creator recommends in the categories Reccas tracks, with links to the original articles.", inputSchema: {type: "object", properties: {source: {type: "string", description: "Publication or creator name, for example Vogue"}}, required: ["source"], additionalProperties: false}},
+  {name: "get_most_recommended_brands", title: "Most recommended brands", description: "Women's fashion brands ranked by how many independent sources recommend at least one of their products, optionally within one product type such as jeans or sneakers.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}, limit: {type: "integer", minimum: 1, maximum: 30}}, additionalProperties: false}},
   {name: "list_categories", title: "List Best of Fashion categories", description: "All Best of Fashion " + FRANCHISE_YEAR + " categories with their current winner or leader.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}}, additionalProperties: false}}
 ];
 
@@ -77,13 +78,17 @@ export async function agentCall(name, a, env) {
     if (!src) return {error: "Reccas does not track a source matching that.", sources: corpus.sourceList.map(function (s) { return s.name; })};
     return {source: src.name, url: SITE + "/sources/" + src.slug, products: src.mentions.map(function (m) { return {product: m.brand + " " + m.name, described_as: m.label, original: m.url, url: SITE + "/products/" + m.productKey}; }), note: "Reccas is not affiliated with " + src.name + ". " + NOTE};
   }
+  if (name === "get_most_recommended_brands") {
+    const list = corpus.brandList.map(function (b) { const who = a.type ? (b.byType[a.type] || []) : b.sources; return {brand: b.name, independent_sources: who.length, sources: who}; }).filter(function (b) { return b.independent_sources >= 2; }).sort(function (x, y) { return y.independent_sources - x.independent_sources; }).slice(0, clamp(a.limit, 1, 30, 10));
+    return {type: a.type || "all", brands: list, url: SITE + "/brands", note: "A brand's count is the number of different independent sources that recommend at least one of its products. " + NOTE};
+  }
   if (name === "list_categories") {
     return {year: FRANCHISE_YEAR, categories: corpus.guideList.filter(function (g) { return !a.type || g.type === a.type; }).map(guideSummary), url: SITE + "/recommendations", note: NOTE};
   }
   return null;
 }
 
-const REST = {"most-recommended": "get_most_recommended", "search": "search_recommendations", "category": "get_category", "product": "get_product_recommendations", "source": "get_source_recommendations", "categories": "list_categories"};
+const REST = {"most-recommended": "get_most_recommended", "search": "search_recommendations", "category": "get_category", "product": "get_product_recommendations", "source": "get_source_recommendations", "categories": "list_categories", "brands": "get_most_recommended_brands"};
 export async function agentRest(path, url, env) {
   const tool = REST[path.replace("/_api/agent/", "")];
   if (!tool) return null;

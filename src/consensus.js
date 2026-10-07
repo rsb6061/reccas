@@ -6,6 +6,8 @@ export const FRANCHISE_PATH = "/recommendations";
 export const AWARD_MIN_SOURCES = 3;
 export const TRACKING_STARTED = "2026-10-07";
 const VERIFY_WINDOW_DAYS = 60;
+const PROMOTE_MIN_SOURCES = 3;
+const BRAND_MIN_SOURCES = 3;
 const INDEXABLE_PRODUCT_MIN_SOURCES = 2;
 const INDEXABLE_SOURCE_MIN_PRODUCTS = 3;
 const MERGED_GUIDE_MAX_PICKS = 8;
@@ -197,7 +199,46 @@ async function loadExtras(env) {
       out.get(r.matched_product_key).push({source: r.source, label: r.label || "Recommended in this article", url: r.url, author: r.author || null, date: r.modified_at || r.published_at || null});
     });
   } catch (_) {}
+  out.promoted = new Map();
+  out.brandRows = [];
+  try {
+    const rows = (await env.DB.prepare("SELECT c.brand,c.name,c.product_key,c.source,c.label,c.url,c.author,c.published_at,c.modified_at,c.price,c.status,COALESCE(c.guide_slug,(SELECT o.guide_slug FROM mention_observations o WHERE o.url=c.url AND o.guide_slug IS NOT NULL LIMIT 1)) guide FROM mention_candidates c WHERE c.validated=1 AND c.status IN ('accepted','new_product')").all()).results || [];
+    const clusters = new Map();
+    rows.forEach(function (r) {
+      const guide = r.guide ? (GUIDE_REDIRECTS[r.guide] || r.guide) : null;
+      out.brandRows.push({brand: r.brand, source: r.source, url: r.url, guide: guide});
+      if (r.status !== "new_product" || !guide) return;
+      const bucket = guide + "|" + compact(r.brand);
+      if (!clusters.has(bucket)) clusters.set(bucket, []);
+      const list = clusters.get(bucket);
+      let c = list.find(function (x) { return x.key === r.product_key || sameProductName(x.name, r.name); });
+      if (!c) { c = {guide: guide, brand: r.brand, name: r.name, key: r.product_key, names: {}, evidence: [], prices: []}; list.push(c); }
+      c.names[r.name] = (c.names[r.name] || 0) + 1;
+      c.evidence.push({source: r.source, label: r.label || "Recommended in this article", url: r.url, author: r.author || null, date: r.modified_at || r.published_at || null});
+      if (r.price != null && Number(r.price) > 0) c.prices.push(Number(r.price));
+    });
+    clusters.forEach(function (list) {
+      list.forEach(function (c) {
+        const independent = [];
+        c.evidence.forEach(function (ev) { const n = sourceName(ev.source); if (isIndependent(ev, {brand: c.brand}) && independent.indexOf(n) < 0) independent.push(n); });
+        if (independent.length < PROMOTE_MIN_SOURCES) return;
+        const cap = (c.guide.match(/under-(\d+)/) || [])[1], price = c.prices.length ? Math.min.apply(null, c.prices) : null;
+        if (cap && (price == null || price > Number(cap))) return;
+        c.name = Object.keys(c.names).sort(function (a, b) { return c.names[b] - c.names[a] || a.length - b.length; })[0];
+        if (!out.promoted.has(c.guide)) out.promoted.set(c.guide, []);
+        out.promoted.get(c.guide).push({brand: c.brand, name: c.name, evidence: c.evidence, fallbackPrice: price, summary: "Added by rule: " + independent.length + " independent sources name it in their guides to this category.", _promoted: true});
+      });
+    });
+  } catch (_) {}
   return out;
+}
+const NAME_FILLER = new Set(["the", "for", "women", "womens", "and", "with", "in", "of"]);
+function nameTokens(v) { return slugify(v).split("-").filter(function (t) { return t.length > 1 && !NAME_FILLER.has(t); }); }
+// Two names are the same product when one's distinctive words all appear in the other.
+// "Clean Cut T-Shirt" and "Clean Cut Regular T-Shirt" match; "Lianna Super Bit Weejuns" and "Whitney Superlug Weejuns" do not.
+function sameProductName(a, b) {
+  const x = nameTokens(a), y = nameTokens(b), small = x.length <= y.length ? x : y, big = x.length <= y.length ? y : x;
+  return small.length >= 2 && small.every(function (t) { return big.indexOf(t) >= 0; });
 }
 async function loadOverlay(env) {
   const out = new Map();
@@ -240,6 +281,12 @@ function buildCorpus(edits, overlay, extras) {
           evidence.forEach(function (ev) { if (!ids.has(ev.sourceSlug + "|" + ev.url)) have.evidence.push(ev); });
         }
       });
+    });
+    ((extras && extras.promoted && extras.promoted.get(canonical)) || []).forEach(function (raw) {
+      const key = slugify(raw.brand + " " + raw.name);
+      if (!key || byKey.has(key)) return;
+      if (Array.from(byKey.values()).some(function (p) { return compact(p.brand) === compact(raw.brand) && sameProductName(p.name, raw.name); })) return;
+      byKey.set(key, Object.assign({}, raw, {key: key, evidence: applyOverlay(key, normalizeEvidence(raw), overlay), _static: true, _order: order++}));
     });
     let picks = Array.from(byKey.values());
     picks.forEach(function (p) { p.independent = independentNames(p.evidence); });
@@ -284,6 +331,23 @@ function buildCorpus(edits, overlay, extras) {
       if (src.productKeys.indexOf(prod.key) < 0) src.productKeys.push(prod.key);
     });
   });
+  const brands = new Map();
+  function addBrand(brand, source, type) {
+    const id = compact(brand);
+    if (!id || !source) return;
+    if (!brands.has(id)) brands.set(id, {id: id, names: {}, sources: [], byType: {}});
+    const b = brands.get(id);
+    b.names[brand] = (b.names[brand] || 0) + 1;
+    if (b.sources.indexOf(source) < 0) b.sources.push(source);
+    if (type) { if (!b.byType[type]) b.byType[type] = []; if (b.byType[type].indexOf(source) < 0) b.byType[type].push(source); }
+  }
+  guides.forEach(function (g) { g.picks.forEach(function (p) { p.evidence.forEach(function (ev) { if (counts(ev)) addBrand(p.brand, ev.source, g.type); }); }); });
+  ((extras && extras.brandRows) || []).forEach(function (r) {
+    if (!isIndependent({source: r.source, url: r.url, label: ""}, {brand: r.brand})) return;
+    const g = r.guide ? guides.get(r.guide) : null;
+    addBrand(r.brand, sourceName(r.source), g ? g.type : null);
+  });
+  const brandList = Array.from(brands.values()).map(function (b) { b.name = Object.keys(b.names).sort(function (x, y) { return b.names[y] - b.names[x]; })[0]; return b; }).sort(function (a, b) { return b.sources.length - a.sources.length || a.name.localeCompare(b.name); });
   const guideList = Array.from(guides.values()).sort(function (a, b) { return b.independentSources.length - a.independentSources.length || a.title.localeCompare(b.title); });
   const productList = Array.from(products.values()).sort(function (a, b) { return b.independent.length - a.independent.length || b.appearances.length - a.appearances.length || (a.brand + a.name).localeCompare(b.brand + b.name); });
   const sourceList = Array.from(sources.values()).sort(function (a, b) { return b.productKeys.length - a.productKeys.length || a.name.localeCompare(b.name); });
@@ -297,7 +361,7 @@ function buildCorpus(edits, overlay, extras) {
   }).filter(function (t) { return t.guides.length; });
   const untyped = guideList.filter(function (g) { return !g.type; });
   if (untyped.length) types.push({key: "more", label: "More", guides: untyped});
-  return {guides: guides, products: products, sources: sources, guideList: guideList, productList: productList, sourceList: sourceList, stats: {guides: guideList.length, products: productList.length, sources: sourceList.length, mentions: mentions}, categoryCounts: perCategory, types: types};
+  return {guides: guides, products: products, sources: sources, guideList: guideList, productList: productList, sourceList: sourceList, stats: {guides: guideList.length, products: productList.length, sources: sourceList.length, mentions: mentions}, categoryCounts: perCategory, types: types, brandList: brandList};
 }
 
 let corpusCache = {at: 0, corpus: null};
@@ -458,14 +522,20 @@ function verifyKeyOk(request, env) {
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i % (given.length || 1));
   return expected.length >= 32 && diff === 0;
 }
+let candidateColumnsReady = false;
 async function ensureCandidates(env) {
   await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS mention_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT,url TEXT NOT NULL,source TEXT NOT NULL,source_slug TEXT NOT NULL,brand TEXT NOT NULL,name TEXT NOT NULL,product_key TEXT NOT NULL,matched_product_key TEXT,label TEXT,basis TEXT,author TEXT,published_at TEXT,modified_at TEXT,validated INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,model TEXT,extracted_on TEXT NOT NULL,UNIQUE(url,product_key))"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mention_candidates_status ON mention_candidates(status,matched_product_key)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS extraction_runs (url TEXT PRIMARY KEY,extracted_on TEXT NOT NULL,products INTEGER,model TEXT,missing TEXT)")
   ]);
+  if (!candidateColumnsReady) {
+    const cols = ((await env.DB.prepare("PRAGMA table_info(mention_candidates)").all()).results || []).map(function (c) { return c.name; });
+    for (const col of ["guide_slug TEXT", "price REAL"]) if (cols.indexOf(col.split(" ")[0]) < 0) await env.DB.prepare("ALTER TABLE mention_candidates ADD COLUMN " + col).run();
+    candidateColumnsReady = true;
+  }
 }
-const EXTRACT_PROMPT = "You read a women's fashion article and list the specific products it recommends. Return JSON: {\"products\":[{\"brand\":\"\",\"name\":\"\",\"label\":\"\",\"basis\":\"\"}]}. Rules: include only products the article itself recommends to readers, each with a brand and a specific product or model name exactly as the article writes it. Leave out brands named without a product, products mentioned only for comparison or criticism, and anything from ads, navigation or related-article links. label is the article's own short descriptor for the product, such as 'Best overall', or an empty string. basis is one of tested, owned, editor_pick, listed. Never invent a product. At most 40 products.";
+const EXTRACT_PROMPT = "You read a women's fashion article and list the specific products it recommends. Return JSON: {\"products\":[{\"brand\":\"\",\"name\":\"\",\"label\":\"\",\"basis\":\"\",\"price\":null}]}. Rules: include only products the article itself recommends to readers, each with a brand and a specific product or model name exactly as the article writes it. Leave out brands named without a product, products mentioned only for comparison or criticism, and anything from ads, navigation or related-article links. label is the article's own short descriptor for the product, such as 'Best overall', or an empty string. basis is one of tested, owned, editor_pick, listed. price is the US dollar price the article states for the product as a number, or null if it states none. Never invent a product. At most 40 products.";
 export async function extractProducts(request, env) {
   if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
   if (!env.OPENAI_API_KEY) return Response.json({error: "OPENAI_API_KEY missing"}, {status: 503});
@@ -479,7 +549,7 @@ export async function extractProducts(request, env) {
       const r = await fetch("https://api.openai.com/v1/chat/completions", {method: "POST", headers: {"content-type": "application/json", Authorization: "Bearer " + env.OPENAI_API_KEY}, body: JSON.stringify({model: model, response_format: {type: "json_object"}, messages: [{role: "system", content: EXTRACT_PROMPT}, {role: "user", content: "Article from " + String(b.source || "").slice(0, 80) + " (" + String(b.url || "").slice(0, 300) + "):\n\n" + text}]})});
       if (!r.ok) { lastError = model + " HTTP " + r.status; continue; }
       const d = await r.json(), parsed = JSON.parse(d.choices[0].message.content);
-      const products = (Array.isArray(parsed.products) ? parsed.products : []).slice(0, 40).map(function (p) { return {brand: String(p.brand || "").trim().slice(0, 80), name: String(p.name || "").trim().slice(0, 160), label: String(p.label || "").trim().slice(0, 120), basis: ["tested", "owned", "editor_pick", "listed"].indexOf(p.basis) >= 0 ? p.basis : "listed"}; }).filter(function (p) { return p.brand && p.name; });
+      const products = (Array.isArray(parsed.products) ? parsed.products : []).slice(0, 40).map(function (p) { return {brand: String(p.brand || "").trim().slice(0, 80), name: String(p.name || "").trim().slice(0, 160), label: String(p.label || "").trim().slice(0, 120), basis: ["tested", "owned", "editor_pick", "listed"].indexOf(p.basis) >= 0 ? p.basis : "listed", price: Number(p.price) > 0 && Number(p.price) < 100000 ? Number(p.price) : null}; }).filter(function (p) { return p.brand && p.name; });
       return Response.json({ok: true, model: model, products: products, usage: d.usage || null});
     } catch (e) { lastError = model + " " + String(e && e.message || e).slice(0, 120); }
   }
@@ -494,7 +564,7 @@ export async function saveCandidates(request, env) {
   await ensureCandidates(env);
   const ok = ["accepted", "new_product", "unvalidated"], d = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? v : null; };
   const stmts = rows.filter(function (r) { return r && r.brand && r.name && r.productKey && ok.indexOf(r.status) >= 0; }).map(function (r) {
-    return env.DB.prepare("INSERT INTO mention_candidates (url,source,source_slug,brand,name,product_key,matched_product_key,label,basis,author,published_at,modified_at,validated,status,model,extracted_on) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(url,product_key) DO UPDATE SET matched_product_key=excluded.matched_product_key,label=excluded.label,basis=excluded.basis,author=excluded.author,published_at=excluded.published_at,modified_at=excluded.modified_at,validated=excluded.validated,status=excluded.status,model=excluded.model,extracted_on=excluded.extracted_on").bind(url, String(b.source || "").slice(0, 120), slugify(b.source), String(r.brand).slice(0, 80), String(r.name).slice(0, 160), String(r.productKey).slice(0, 300), r.matchedProductKey ? String(r.matchedProductKey).slice(0, 300) : null, String(r.label || "").slice(0, 120) || null, r.basis || null, b.author ? String(b.author).slice(0, 160) : null, d(b.publishedAt), d(b.modifiedAt), r.validated ? 1 : 0, r.status, String(b.model || "").slice(0, 40) || null, day);
+    return env.DB.prepare("INSERT INTO mention_candidates (url,source,source_slug,brand,name,product_key,matched_product_key,label,basis,author,published_at,modified_at,validated,status,model,extracted_on,guide_slug,price) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(url,product_key) DO UPDATE SET guide_slug=COALESCE(excluded.guide_slug,mention_candidates.guide_slug),price=COALESCE(excluded.price,mention_candidates.price),matched_product_key=excluded.matched_product_key,label=excluded.label,basis=excluded.basis,author=excluded.author,published_at=excluded.published_at,modified_at=excluded.modified_at,validated=excluded.validated,status=excluded.status,model=excluded.model,extracted_on=excluded.extracted_on").bind(url, String(b.source || "").slice(0, 120), slugify(b.source), String(r.brand).slice(0, 80), String(r.name).slice(0, 160), String(r.productKey).slice(0, 300), r.matchedProductKey ? String(r.matchedProductKey).slice(0, 300) : null, String(r.label || "").slice(0, 120) || null, r.basis || null, b.author ? String(b.author).slice(0, 160) : null, d(b.publishedAt), d(b.modifiedAt), r.validated ? 1 : 0, r.status, String(b.model || "").slice(0, 40) || null, day, b.guideSlug ? String(b.guideSlug).slice(0, 200) : null, Number(r.price) > 0 ? Number(r.price) : null);
   });
   stmts.push(env.DB.prepare("INSERT INTO extraction_runs (url,extracted_on,products,model,missing) VALUES (?,?,?,?,?) ON CONFLICT(url) DO UPDATE SET extracted_on=excluded.extracted_on,products=excluded.products,model=excluded.model,missing=excluded.missing").bind(url, day, rows.length, String(b.model || "").slice(0, 40) || null, JSON.stringify((Array.isArray(b.missing) ? b.missing : []).slice(0, 40))));
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
@@ -680,6 +750,7 @@ export const CONSENSUS_CSS = `
 .searchForm{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px;max-width:620px}
 .searchForm .field{flex:1;min-width:220px}
 @media(max-width:760px){.navRight{margin-left:auto;gap:4px;position:static}.nav{position:relative}.navAlerts span{display:none}.navAlerts{padding:9px 11px}.navSearch.open{position:absolute;left:8px;right:8px;top:8px;bottom:8px;background:#fff;border-radius:999px;z-index:5}.navSearch.open input{flex:1;width:auto}}
+.footNote{font-size:12px;line-height:1.55;color:var(--muted);max-width:760px;margin:0}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 @media(max-width:720px){.rankRow{grid-template-columns:30px 60px 1fr;gap:12px}.rankRow img{width:60px;height:60px}.rankCount{grid-column:2/4;text-align:left}.rankCount strong{display:inline;font-size:20px;margin-right:5px}.productHero{grid-template-columns:1fr}}
 `;
@@ -866,7 +937,7 @@ export function createPages(h) {
       + "<h2>What counts as a recommendation</h2><ul><li>It names a specific product, not a brand or a style.</li><li>It is attributable to a publication or a named person, and Reccas links to it.</li><li>It is independent of the company that makes or sells the product.</li><li>The product can be matched to an exact item that is still sold.</li></ul>"
       + "<h2>What does not count</h2><ul><li>A brand’s own product page or marketing.</li><li>A retailer’s product listing.</li><li>Customer reviews on a brand or retailer site.</li></ul><p>These appear on product pages as references, because they confirm product details, but they are never added to a product’s count.</p>"
       + "<h2>How products are ranked</h2><p>Each product’s count is the number of different independent sources that recommend it. A source is counted once per product, even if several of its articles mention it. Within a category, products are ordered by that count; when two products tie, the order is editorial. Commission rates and affiliate availability play no part in the order.</p>"
-      + "<h2>How a category gets a winner</h2><p>A category has a Best of Fashion " + FRANCHISE_YEAR + " winner only when its leading product is recommended by at least " + AWARD_MIN_SOURCES + " independent sources. Right now " + a.won.length + " of " + s.guides + " categories meet that bar. The other " + a.pending.length + " are listed as not yet awarded on the <a href='" + FRANCHISE_PATH + "'>Best of Fashion page</a>.</p>"
+      + "<h2>How a product gets onto a list</h2><p>Reccas reads the guides that established publications publish for each category. A product is added to a category automatically once " + PROMOTE_MIN_SOURCES + " independent sources name it there. A product named by only one or two sources is recorded but not shown. In a price-capped category, a product is added only if an article states a price within the cap.</p><h2>How a category gets a winner</h2><p>A category has a Best of Fashion " + FRANCHISE_YEAR + " winner only when its leading product is recommended by at least " + AWARD_MIN_SOURCES + " independent sources. Right now " + a.won.length + " of " + s.guides + " categories meet that bar. The other " + a.pending.length + " are listed as not yet awarded on the <a href='" + FRANCHISE_PATH + "'>Best of Fashion page</a>.</p>"
       + "<h2>Shopping checks and money</h2><p>Reccas checks that each product is still sold and shows a current price where one is available. Some shopping links are affiliate links and Reccas may earn a commission. Where no affiliate link exists, the link goes straight to the product. Nobody can pay to be included or ranked.</p>"
       + "<h2>How recommendations are kept fresh</h2><p>Every week Reccas re-reads each source article and checks that it still names the product. Each guide shows the date its sources were last verified and how many were confirmed; each product page shows the date per source. Prices are checked daily where a live price is available. </p><ul><li>If the product is found, the recommendation counts.</li><li>If it is not found, the article is read a second time by an AI model. If that read finds the product under a slightly different name, the recommendation keeps counting. If it finds a different model or nothing, the recommendation stops counting that day and is shown as no longer listed, with the date.</li><li>A publisher that blocks automated readers cannot be re-checked, so its recommendations are shown but not counted.</li><li>A recommendation that stops counting is never deleted. The record of when it stopped is kept.</li><li>A category loses its winner automatically if its leader falls below " + AWARD_MIN_SOURCES + " counted sources.</li></ul><h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging recommendations on " + TRACKING_STARTED + ", so trends over time are not reported yet.</li><li>Several large publishers block automated readers, so their recommendations are not counted. That makes the counts conservative.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
       + "<h2>Corrections</h2><p>If a recommendation is misattributed, a link is broken or a product is matched wrongly, email <a href='mailto:hello@reccas.com'>hello@reccas.com</a> and it will be fixed.</p></section></main>";
@@ -901,7 +972,7 @@ export function createPages(h) {
     }).join("");
     const lead = picks[0], awarded = lead && lead.independent.length >= AWARD_MIN_SOURCES;
     const metrics = "<div class='editMetrics'><span><strong>" + esc(picks.length) + "</strong> ranked picks</span><span><strong>" + esc(total) + "</strong> independent sources</span>" + (lastVerified ? "<span><strong>" + esc(niceDate(lastVerified)) + "</strong> sources last verified · " + confirmed + " of " + checkable + " readable sources confirmed</span>" : "<span><strong>" + esc(guide.checkedLabel) + "</strong> last checked</span>") + "</div>";
-    const intro = "<section class='editIntro'><div><span class='eyebrow'>" + (awarded ? "Best of Fashion " + FRANCHISE_YEAR + " winner" : "Not yet awarded") + "</span><h2>" + (awarded ? esc(lead.brand + " " + lead.name) : "Still gathering evidence.") + "</h2></div><p>" + (awarded ? esc(lead.brand + " " + lead.name) + " leads this category with " + lead.independent.length + " independent sources. " : "No product here has reached the " + AWARD_MIN_SOURCES + " independent sources needed to win the category. ") + "Picks are ranked by how many independent sources recommend them. Sources shown with a dashed outline are not counted: brand and retailer pages, sources that no longer list the product, and publishers whose pages cannot be re-checked. <a class='plainLink' href='/methodology'>How we count</a>.</p></section>";
+    const intro = "<section class='editIntro'><div><span class='eyebrow'>" + (awarded ? "Best of Fashion " + FRANCHISE_YEAR + " winner" : "Not yet awarded") + "</span><h2>" + (awarded ? esc(lead.brand + " " + lead.name) : "Still gathering evidence.") + "</h2></div><p>" + (awarded ? esc(lead.brand + " " + lead.name) + " leads this category with " + lead.independent.length + " independent sources. " : "No product here has reached the " + AWARD_MIN_SOURCES + " independent sources needed to win the category. ") + "Picks are ranked by how many independent sources recommend them, and a product joins this list automatically once " + PROMOTE_MIN_SOURCES + " independent sources name it. Sources shown with a dashed outline are not counted: brand and retailer pages, sources that no longer list the product, and publishers whose pages cannot be re-checked. <a class='plainLink' href='/methodology'>How we count</a>.</p></section>";
     const method = "<section class='editMethod'><span class='eyebrow'>How Reccas built this guide</span><h2>What counts as a recommendation?</h2><p>" + esc(guide.freshnessCopy || "The product must still satisfy the stated category, price, or use-case constraint when Reccas checks it.") + " Reccas may earn a commission from some shopping links; that does not affect the ranking.</p></section>";
     const socialImage = lead ? "https://reccas.com" + imageUrl({slug: slug, rank: lead.rank}) : null;
     const listSchema = {"@type": "ItemList", name: guide.title, itemListElement: picks.map(function (x, i) { return {"@type": "ListItem", position: i + 1, name: String(x.brand + " " + x.name), url: "https://reccas.com/products/" + x.key}; })};
@@ -974,9 +1045,21 @@ export function createPages(h) {
     return "<section class='section'><div class='eyebrow'>What’s moving</div><h2>Trending this week</h2><div class='rankList'>" + t.gaining.slice(0, 4).map(function (g) { return productRow(g.prod, "↑", "Gained " + plural(g.to - g.from, "source")); }).join("") + t.onSale.slice(0, 2).map(function (g) { return productRow(g.prod, "↓", money(g.to) + ", down " + Math.round((1 - g.to / g.from) * 100) + "%"); }).join("") + "</div><p style='margin-top:20px'><a class='btn alt' href='/trending'>See everything that moved</a></p></section>";
   }
 
+  async function brandsPage(env) {
+    const corpus = await getCorpus(env), top = corpus.brandList.filter(function (b) { return b.sources.length >= BRAND_MIN_SOURCES; });
+    const row = function (b, n, names) { return "<tr><td><strong>" + esc(b.name) + "</strong></td><td>" + n + "</td><td class='rankMeta'>" + namesLine(names, 6) + "</td></tr>"; };
+    const typeSections = corpus.types.filter(function (t) { return t.key !== "more"; }).map(function (t) {
+      const list = corpus.brandList.filter(function (b) { return (b.byType[t.key] || []).length >= 2; }).sort(function (a, b) { return b.byType[t.key].length - a.byType[t.key].length || a.name.localeCompare(b.name); }).slice(0, 8);
+      if (list.length < 3) return "";
+      return "<div class='typeGroup' id='" + esc(t.key) + "'><h3>" + esc(t.label) + "</h3><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Brand</th><th>Independent sources</th><th>Who</th></tr></thead><tbody>" + list.map(function (b) { return row(b, b.byType[t.key].length, b.byType[t.key]); }).join("") + "</tbody></table></div></div>";
+    }).join("");
+    const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Best of Fashion " + FRANCHISE_YEAR + "</span><h1>The most recommended women’s fashion brands</h1><p>Brands ranked by how many different independent sources recommend at least one of their products, across every article Reccas has read. A brand’s own pages and retailer listings are never counted.</p></section><section class='section'><h2>Overall</h2><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Brand</th><th>Independent sources</th><th>Who</th></tr></thead><tbody>" + top.slice(0, 40).map(function (b) { return row(b, b.sources.length, b.sources); }).join("") + "</tbody></table></div></section><section class='section'><h2>By product type</h2><p class='muted'>Counts here include only sources recommending the brand within that product type.</p>" + typeSections + "</section><section class='editMethod'><span class='eyebrow'>Reading this list</span><h2>Breadth of agreement, not a quality score.</h2><p>A high count means many independent publications each recommend something from the brand. It does not mean every product from the brand is recommended. <a class='plainLink' href='/methodology'>Methodology</a>.</p></section></main>";
+    return page("/brands", "Most Recommended Women’s Fashion Brands of " + FRANCHISE_YEAR, body, "The women’s fashion brands recommended by the most independent editors and testers in " + FRANCHISE_YEAR + ", overall and by product type, with the sources named.", 200, top.length >= 10 ? null : "noindex, follow", {kind: "collection", breadcrumb: "Most recommended brands"});
+  }
+
   async function sitemapEntries(env) {
     const corpus = await getCorpus(env), day = today(), out = [];
-    ["/", FRANCHISE_PATH, "/most-recommended", "/alerts", "/sources", "/methodology", "/about", "/press", "/developers", "/privacy"].forEach(function (p) { out.push({p: p, last: day}); });
+    ["/", FRANCHISE_PATH, "/most-recommended", "/brands", "/alerts", "/sources", "/methodology", "/about", "/press", "/developers", "/privacy"].forEach(function (p) { out.push({p: p, last: day}); });
     Object.keys(CATEGORIES).forEach(function (k) { if (corpus.categoryCounts[k] > 0) out.push({p: "/recommendations/" + k, last: day}); });
     corpus.guideList.forEach(function (g) { out.push({p: "/" + g.slug, last: day}); });
     corpus.productList.forEach(function (p) { if (p.independent.length >= INDEXABLE_PRODUCT_MIN_SOURCES) out.push({p: "/products/" + p.key, last: day}); });
@@ -984,5 +1067,5 @@ export function createPages(h) {
     return out;
   }
 
-  return {home: home, recommendations: recommendations, categoryPage: categoryPage, mostRecommended: mostRecommended, sourcesIndex: sourcesIndex, sourcePage: sourcePage, productPage: productPage, methodology: methodology, guidePage: guidePage, search: search, alerts: alerts, trending: trending, sitemapEntries: sitemapEntries};
+  return {home: home, recommendations: recommendations, categoryPage: categoryPage, mostRecommended: mostRecommended, sourcesIndex: sourcesIndex, sourcePage: sourcePage, productPage: productPage, methodology: methodology, guidePage: guidePage, search: search, alerts: alerts, trending: trending, brandsPage: brandsPage, sitemapEntries: sitemapEntries};
 }

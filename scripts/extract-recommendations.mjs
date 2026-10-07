@@ -4,6 +4,7 @@
 //   - if Reccas already tracks the product, the article becomes a source for it;
 //   - a product Reccas does not track is stored and stays off the site.
 // Blocked publishers are skipped. Each article is read at most once every 30 days.
+import {readFileSync} from "node:fs";
 import {fetchPage, mentions, visibleText} from "./verify-sources.mjs";
 
 const SITE = process.env.RECCAS_SITE || "https://reccas.com";
@@ -64,13 +65,19 @@ async function main() {
     if (!byUrl.has(m.url)) byUrl.set(m.url, []);
     byUrl.get(m.url).push(m);
   }
+  // Articles listed for a category come first: depth on one question is what produces agreement.
+  const registry = JSON.parse(readFileSync(new URL("../data/category-sources.json", import.meta.url), "utf8")), info = new Map();
+  for (const guide of Object.keys(registry)) {
+    if (guide.startsWith("_")) continue;
+    for (const a of registry[guide]) { info.set(a.url, {guide, source: a.source}); if (!byUrl.has(a.url)) byUrl.set(a.url, []); }
+  }
   const runs = await waitForKey(), cutoff = new Date(Date.now() - REFRESH_DAYS * 86400000).toISOString().slice(0, 10);
   const fresh = new Set(runs.filter((r) => r.extracted_on > cutoff).map((r) => r.url));
-  const queue = Array.from(byUrl.keys()).filter((u) => !fresh.has(u)).slice(0, LIMIT);
+  const queue = Array.from(byUrl.keys()).filter((u) => !fresh.has(u)).sort((a, b) => (info.has(b) ? 1 : 0) - (info.has(a) ? 1 : 0)).slice(0, LIMIT);
   const today = new Date().toISOString().slice(0, 10), total = {articles: 0, blocked: 0, failed: 0, accepted: 0, newProduct: 0, unvalidated: 0, already: 0, missing: 0};
   console.log(`${byUrl.size} cited articles, ${fresh.size} read recently, reading ${queue.length} now.`);
   for (const url of queue) {
-    const cited = byUrl.get(url), source = cited[0].source, page = await fetchPage(url);
+    const cited = byUrl.get(url), listed = info.get(url), source = listed ? listed.source : cited[0].source, guideSlug = listed ? listed.guide : (cited[0] && cited[0].guideSlug) || null, page = await fetchPage(url);
     if (page.status !== "ok") { total.blocked++; continue; }
     const text = articleText(page.html);
     const ex = await api("/_api/admin/extract", {method: "POST", body: JSON.stringify({url, source, text})});
@@ -86,11 +93,11 @@ async function main() {
       if (matched && cited.some((m) => m.productKey === matched)) { total.already++; continue; }
       const status = !validated ? "unvalidated" : matched ? "accepted" : "new_product";
       total[status === "accepted" ? "accepted" : status === "new_product" ? "newProduct" : "unvalidated"]++;
-      rows.push({brand: p.brand, name: p.name, productKey, matchedProductKey: matched, label: p.label, basis: p.basis, validated, status});
+      rows.push({brand: p.brand, name: p.name, productKey, matchedProductKey: matched, label: p.label, basis: p.basis, price: p.price || null, validated, status});
     }
     const missing = cited.filter((m) => !matchedKeys.has(m.productKey)).map((m) => m.key);
     total.missing += missing.length;
-    const saved = await api("/_api/admin/candidates", {method: "POST", body: JSON.stringify({day: today, url, source, model: ex.body.model, author: page.meta.author, publishedAt: page.meta.publishedAt, modifiedAt: page.meta.modifiedAt, rows, missing})});
+    const saved = await api("/_api/admin/candidates", {method: "POST", body: JSON.stringify({day: today, url, source, guideSlug, model: ex.body.model, author: page.meta.author, publishedAt: page.meta.publishedAt, modifiedAt: page.meta.modifiedAt, rows, missing})});
     console.log(`  ${source}: ${ex.body.products.length} products read, ${rows.filter((r) => r.status === "accepted").length} new sources for tracked products, ${rows.filter((r) => r.status === "new_product").length} untracked${saved.ok ? "" : " (SAVE FAILED " + saved.status + ")"}`);
   }
   console.log("Totals:", JSON.stringify(total));
