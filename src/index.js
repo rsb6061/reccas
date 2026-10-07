@@ -677,6 +677,29 @@ async function wardrobeProfile(request,env){
   else if(!existing){var base={top_size:null,bottom_size:null,dress_size:null,shoe_size:null,budget_min:null,budget_max:null,preferred_colors:"[]",favorite_brands:"[]",avoid_brands:"[]",preferred_materials:"[]",avoid_materials:"[]",style_words:"[]",style_icons:"[]",notes:null};Object.keys(vals).forEach(function(k){base[k]=vals[k]});await env.DB.prepare("INSERT INTO user_style_profiles(user_id,top_size,bottom_size,dress_size,shoe_size,budget_min,budget_max,preferred_colors,favorite_brands,avoid_brands,preferred_materials,avoid_materials,style_words,style_icons,notes,onboarding_complete,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(who.user.id,base.top_size,base.bottom_size,base.dress_size,base.shoe_size,base.budget_min,base.budget_max,base.preferred_colors,base.favorite_brands,base.avoid_brands,base.preferred_materials,base.avoid_materials,base.style_words,base.style_icons,base.notes,1,now,now).run()}
   return Response.json({ok:true},{headers:{"Cache-Control":"no-store"}});
 }
+async function ensurePriceWatches(env){
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS price_watches (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,watch_key TEXT NOT NULL,source TEXT,source_product_id TEXT,product_id INTEGER,brand TEXT,product_name TEXT,product_url TEXT,image_url TEXT,guide_slug TEXT,baseline_price REAL,last_price REAL,currency TEXT DEFAULT 'USD',status TEXT DEFAULT 'active',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(user_id,watch_key))").run();
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_price_watches_user_status ON price_watches(user_id,status)").run();
+}
+async function priceWatch(request,env){
+  var who=await sessionUser(request,env);if(!who)return Response.json({error:"Not authenticated"},{status:401,headers:{"Cache-Control":"no-store"}});
+  await ensurePriceWatches(env);
+  if(request.method==="GET"){
+    var u=new URL(request.url),slug=String(u.searchParams.get("slug")||""),rows=slug?await all(env.DB,"SELECT watch_key,baseline_price,last_price,status FROM price_watches WHERE user_id=? AND guide_slug=? AND status='active'",who.user.id,slug):await all(env.DB,"SELECT watch_key,baseline_price,last_price,status FROM price_watches WHERE user_id=? AND status='active' ORDER BY updated_at DESC LIMIT 500",who.user.id);
+    return Response.json({watches:rows},{headers:{"Cache-Control":"no-store"}});
+  }
+  if(request.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
+  var b=await readAuthBody(request),action=String(b.action||"watch"),key=String(b.watchKey||"").trim();
+  if(!key||key.length>500)return Response.json({error:"Invalid watch key"},{status:400});
+  if(action==="remove"){
+    await env.DB.prepare("UPDATE price_watches SET status='removed',updated_at=? WHERE user_id=? AND watch_key=?").bind(new Date().toISOString(),who.user.id,key).run();
+    return Response.json({ok:true,watched:false},{headers:{"Cache-Control":"no-store"}});
+  }
+  var price=b.price==null||b.price===""?null:Number(b.price);if(price!=null&&!Number.isFinite(price))price=null;
+  var now=new Date().toISOString();
+  await env.DB.prepare("INSERT INTO price_watches(user_id,watch_key,source,source_product_id,product_id,brand,product_name,product_url,image_url,guide_slug,baseline_price,last_price,currency,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'active',?,?) ON CONFLICT(user_id,watch_key) DO UPDATE SET source=excluded.source,source_product_id=excluded.source_product_id,product_id=excluded.product_id,brand=excluded.brand,product_name=excluded.product_name,product_url=excluded.product_url,image_url=excluded.image_url,guide_slug=excluded.guide_slug,last_price=excluded.last_price,status='active',updated_at=excluded.updated_at").bind(who.user.id,key,String(b.source||"reccas").slice(0,50),b.sourceProductId==null?null:String(b.sourceProductId).slice(0,200),b.productId==null?null:Number(b.productId),String(b.brand||"").slice(0,200),String(b.name||"").slice(0,300),String(b.productUrl||"").slice(0,2000),String(b.imageUrl||"").slice(0,2000),String(b.guideSlug||"").slice(0,300),price,price,String(b.currency||"USD").slice(0,10),now,now).run();
+  return Response.json({ok:true,watched:true},{headers:{"Cache-Control":"no-store"}});
+}
 async function wardrobeSignal(request,env){
   var who=await sessionUser(request,env);if(!who)return Response.json({error:"Not authenticated"},{status:401});var b=await readAuthBody(request),pid=Number(b.productId),signal=String(b.signal||""),allowed=["own","skip","save","watch"];if(!pid||allowed.indexOf(signal)<0)return Response.json({error:"Invalid product signal"},{status:400});var target=signal==="watch"&&b.targetPrice!=null&&b.targetPrice!==""?Number(b.targetPrice):null,now=new Date().toISOString();
   await env.DB.prepare("INSERT INTO user_product_signals(user_id,product_id,signal,target_price,created_at,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,product_id) DO UPDATE SET signal=excluded.signal,target_price=excluded.target_price,updated_at=excluded.updated_at").bind(who.user.id,pid,signal,target,now,now).run();
@@ -870,6 +893,7 @@ export default {async fetch(request,env){
   if(path==="/_api/wardrobe/item"&&request.method==="POST")return addWardrobeItem(request,env);
   if(path==="/_api/wardrobe/profile"&&request.method==="POST")return wardrobeProfile(request,env);
   if(path==="/_api/wardrobe/signal"&&request.method==="POST")return wardrobeSignal(request,env);
+  if(path==="/_api/price-watch"&&(request.method==="GET"||request.method==="POST"))return priceWatch(request,env);
   if(path==="/_api/wardrobe/outfits/feedback"&&request.method==="POST")return wardrobeFeedback(request,env);
   if(path==="/_api/wardrobe/outfits/generate"&&request.method==="POST")return generateWardrobe(request,env);
   if(path==="/_api/wardrobe/product-search"&&request.method==="POST")return wardrobeProductSearchFull(request,env);
