@@ -37,6 +37,19 @@ header{position:sticky;top:0;z-index:20;padding:16px 0;background:rgba(247,240,2
 .nav{max-width:1180px;margin:auto;min-height:58px;padding:8px 10px 8px 18px;display:flex;align-items:center;gap:24px;background:rgba(255,255,255,.72);border:1px solid var(--lavender);border-radius:999px;box-shadow:0 8px 24px rgba(41,32,89,.06);backdrop-filter:blur(10px)}
 .brand{font-size:20px;font-weight:550;letter-spacing:-.03em;white-space:nowrap}
 .navlinks{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:14px}
+.navDrop{position:relative}
+.navDrop>a{display:inline-flex;align-items:center;gap:6px}
+.navDrop>a:after{content:"⌄";font-size:11px;color:var(--muted);transform:translateY(-1px)}
+.navMenu{position:absolute;top:calc(100% + 12px);left:50%;transform:translateX(-50%) translateY(-4px);min-width:190px;padding:8px;background:#fff;border:1px solid var(--lavender);border-radius:18px;box-shadow:0 18px 50px rgba(27,21,60,.12);opacity:0;visibility:hidden;pointer-events:none;transition:.16s;z-index:40}
+.navMenu:before{content:"";position:absolute;left:0;right:0;top:-14px;height:14px}
+.navDrop:hover .navMenu,.navDrop:focus-within .navMenu{opacity:1;visibility:visible;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+.navMenu a{display:block;padding:10px 12px;border-radius:12px;white-space:nowrap;color:var(--ink)}
+.navMenu a:hover,.navMenu a:focus{background:var(--cream);color:var(--blue)}
+.categoryGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:22px}
+.categoryCard{display:block;border:1px solid var(--lavender);background:rgba(255,255,255,.72);border-radius:20px;padding:18px;transition:.15s}
+.categoryCard:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(27,21,60,.08)}
+.categoryCard strong{display:block;font-family:var(--display);font-size:24px;color:var(--ink);margin-bottom:4px}
+.categoryCard span{font-size:12px;color:var(--muted)}
 .navlinks a{padding:9px 12px;border-radius:999px;color:#514b65}
 .navlinks a:hover,.navlinks a:focus{background:#efeaff;color:var(--ink)}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:11px 20px;border:1px solid var(--blue);border-radius:999px;background:var(--blue);color:#fff;font:inherit;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 5px 14px rgba(66,85,255,.16);transition:transform .14s ease,box-shadow .14s ease,background .14s ease}
@@ -161,6 +174,7 @@ h3{font-size:23px;line-height:1.1;letter-spacing:-.025em}
   header{padding:10px 12px}
   .nav{min-height:54px;padding:7px 8px 7px 14px;gap:10px}
   .navlinks{display:none}
+  .categoryGrid{grid-template-columns:1fr 1fr}
   .brand{font-size:18px}
   .btn{min-height:40px;padding:9px 14px}
   .wrap{padding-left:18px;padding-right:18px}
@@ -204,7 +218,7 @@ function page(path,title,body,desc,status,robots,extra){
   var icon="/favicon-r.png?v=20261007",robotText=robots||"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",ogType=extra.kind==="article"?"article":"website";
   var image=extra.image?String(extra.image):"";
   var head="<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+esc(fullTitle)+"</title><meta name='description' content='"+esc(description)+"'><meta name='robots' content='"+esc(robotText)+"'><meta name='googlebot' content='"+esc(robotText)+"'><meta name='application-name' content='Reccas'><meta name='theme-color' content='#f7f0e6'><link rel='canonical' href='"+esc(url)+"'><link rel='manifest' href='/manifest.json?v=20261007'><link rel='icon' type='image/png' sizes='128x128' href='"+icon+"'><link rel='shortcut icon' href='"+icon+"'><link rel='apple-touch-icon' href='"+icon+"'><meta property='og:site_name' content='Reccas'><meta property='og:type' content='"+ogType+"'><meta property='og:title' content='"+esc(fullTitle)+"'><meta property='og:description' content='"+esc(description)+"'><meta property='og:url' content='"+esc(url)+"'>"+(image?"<meta property='og:image' content='"+esc(image)+"'>":"")+"<meta name='twitter:card' content='"+(image?"summary_large_image":"summary")+"'><meta name='twitter:title' content='"+esc(fullTitle)+"'><meta name='twitter:description' content='"+esc(description)+"'>"+(image?"<meta name='twitter:image' content='"+esc(image)+"'>":"")+"<script type='application/ld+json'>"+schema+"</script><script type='text/javascript'>(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,'clarity','script','yu1hc4t3ym');</script><style>"+css+"</style></head><body>";
-  var nav="<header><div class='nav'><a class='brand' href='/'>Reccas</a><nav class='navlinks'><a href='/recommendations'>Best of Fashion 2026</a><a href='/about'>About</a></nav><a class='btn alt' href='/recommendations'>What’s worth buying</a></div></header>";
+  var nav="<header><div class='nav'><a class='brand' href='/'>Reccas</a><nav class='navlinks'><div class='navDrop'><a href='/recommendations'>Best of Fashion 2026</a><div class='navMenu'><a href='/recommendations/clothing'>Clothing</a><a href='/recommendations/shoes'>Shoes</a><a href='/recommendations/bags'>Bags</a><a href='/recommendations/accessories'>Accessories</a></div></div><a href='/about'>About</a></nav><a class='btn alt' href='/recommendations'>What’s worth buying</a></div></header>";
   var crumb=path!=="/"&&String(robotText).indexOf("noindex")<0?"<div class='breadcrumbs'><a href='/'>Reccas</a><span>›</span><span>"+esc(extra.breadcrumb||title)+"</span></div>":"";
   var foot="<footer class='footer'><div class='footer-inner'><div><div class='footer-brand'>Reccas</div><div>Evidence-backed fashion recommendations: what editors and testers keep recommending, what is still available, and what is actually worth buying.</div></div><nav class='footer-links'><a href='/recommendations'>Best of Fashion</a><a href='/guides'>Style guides</a><a href='/wardrobe'>Wardrobe</a><a href='/about'>About</a><a href='/privacy'>Privacy</a><a href='/llms.txt'>llms.txt</a></nav></div></footer></body></html>";
   return new Response(head+nav+crumb+body+foot,{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":status===404?"no-store":"public, max-age=120","x-content-type-options":"nosniff","referrer-policy":"strict-origin-when-cross-origin"}});
@@ -383,6 +397,25 @@ async function recommendationIndex(env){
   Object.keys(STATIC_EDITS).forEach(function(slug){if(bySlug.has(slug))return;var e=STATIC_EDITS[slug];bySlug.set(slug,{slug:slug,title:e.title||slug,description:e.description||e.deck||"",picks:(e.picks||[]).length,sources:(e.picks||[]).reduce(function(n,p){return n+(p.evidence||[]).length},0),kind:"static"})});
   return Array.from(bySlug.values()).sort(function(a,b){return b.sources-a.sources||String(a.title).localeCompare(String(b.title))});
 }
+const RECOMMENDATION_CATEGORIES={
+  clothing:{label:"Clothing",description:"T-shirts, dresses, trousers, jeans, sweaters, blazers, coats and other wardrobe staples."},
+  shoes:{label:"Shoes",description:"Loafers, flats, sneakers, boots, heels, sandals and other footwear."},
+  bags:{label:"Bags",description:"Totes, crossbody bags, shoulder bags, clutches and everyday carry."},
+  accessories:{label:"Accessories",description:"Belts, sunglasses, scarves, hats and other finishing pieces."}
+};
+function recommendationCategory(r){
+  var t=(" "+String((r&&r.title)||"")+" "+String((r&&r.slug)||"")+" ").toLowerCase();
+  if(/\b(shoe|shoes|sneaker|sneakers|loafer|loafers|flat|flats|boot|boots|heel|heels|sandal|sandals|mule|mules|pump|pumps|ballet)\b/.test(t))return"shoes";
+  if(/\b(bag|bags|tote|totes|crossbody|clutch|clutches|purse|purses|backpack|backpacks|handbag|handbags|shoulder bag)\b/.test(t))return"bags";
+  if(/\b(accessor|belt|belts|sunglass|sunglasses|scarf|scarves|hat|hats|jewelry|jewellery|watch|watches|sock|socks)\b/.test(t))return"accessories";
+  return"clothing";
+}
+function recommendationCategoryCounts(recs){
+  var out={clothing:0,shoes:0,bags:0,accessories:0};
+  (recs||[]).forEach(function(r){var c=recommendationCategory(r);if(out[c]!=null)out[c]++});
+  return out;
+}
+
 async function home(env){
   var recs=(await recommendationIndex(env)).slice(0,9);
   var cards=recs.map(function(r){return "<a class='card' href='/"+esc(r.slug)+"'><span class='eyebrow'>"+esc(r.sources)+" sourced mention"+(r.sources===1?"":"s")+"</span><h3>"+esc(r.title)+"</h3><p>"+esc(String(r.description||"Evidence-backed fashion recommendation from Reccas.").slice(0,155))+"</p><strong>See what’s worth buying →</strong></a>"}).join("");
@@ -390,10 +423,19 @@ async function home(env){
   return page("/","Fashion Recommendations With Receipts",body,"Reccas finds the clothes fashion editors and testers consistently recommend, then checks current availability, price, fit caveats and what is actually worth buying.",200,null,{schema:[{"@type":"WebApplication",name:"Reccas",url:"https://reccas.com/",applicationCategory:"ShoppingApplication",operatingSystem:"Web",description:"Evidence-backed fashion recommendation engine."}]});
 }
 async function recommendations(env){
-  var recs=await recommendationIndex(env),cards=recs.map(function(r){return "<a class='guideTile' href='/"+esc(r.slug)+"'><div class='eyebrow'>"+esc(r.picks)+" picks · "+esc(r.sources)+" sourced mention"+(r.sources===1?"":"s")+"</div><h3>"+esc(r.title)+"</h3><p>"+esc(String(r.description||"Evidence-backed fashion recommendation from Reccas."))+"</p><strong>See the evidence →</strong></a>"}).join("");
-  var body="<main class='wrap'><section class='hero'><span class='eyebrow'>Best of Fashion 2026</span><h1>Best of Fashion</h1><p>The clothes, shoes and accessories most consistently recommended by the fashion editors, stylists, creators and testers Reccas tracks.</p></section><section class='section'><h2>"+recs.length+" research-backed picks</h2><p class='guideCount'>We aggregate attributable recommendations, resolve them to exact products, and check current price, availability and caveats before a pick makes the list.</p><div class='guideGrid'>"+cards+"</div></section><section class='editMethod'><span class='eyebrow'>How it works</span><h2>Consensus, not a judging panel.</h2><p>Best of Fashion is built from observed recommendations across the fashion sources Reccas tracks. We look for repeated, attributable praise across editors, stylists, creators and testers, then keep the product evidence visible so you can inspect the sources yourself.</p></section></main>";
+  var recs=await recommendationIndex(env),counts=recommendationCategoryCounts(recs),cards=recs.map(function(r){return "<a class='guideTile' href='/"+esc(r.slug)+"'><div class='eyebrow'>"+esc(r.picks)+" picks · "+esc(r.sources)+" recommendation"+(r.sources===1?"":"s")+"</div><h3>"+esc(r.title)+"</h3><p>"+esc(String(r.description||"Evidence-backed fashion recommendation from Reccas."))+"</p><strong>See the evidence →</strong></a>"}).join("");
+  var cats=Object.keys(RECOMMENDATION_CATEGORIES).map(function(k){var c=RECOMMENDATION_CATEGORIES[k];return "<a class='categoryCard' href='/recommendations/"+k+"'><strong>"+esc(c.label)+"</strong><span>"+esc(counts[k])+" research-backed guide"+(counts[k]===1?"":"s")+"</span></a>"}).join("");
+  var body="<main class='wrap'><section class='hero'><span class='eyebrow'>Best of Fashion 2026</span><h1>Best of Fashion</h1><p>The clothes, shoes and accessories most consistently recommended by the fashion editors, stylists, creators and testers Reccas tracks.</p><div class='categoryGrid'>"+cats+"</div></section><section class='section'><h2>"+recs.length+" research-backed picks</h2><p class='guideCount'>We aggregate attributable recommendations, resolve them to exact products, and check current price, availability and caveats before a pick makes the list.</p><div class='guideGrid'>"+cards+"</div></section><section class='editMethod'><span class='eyebrow'>How it works</span><h2>Consensus, not a judging panel.</h2><p>Best of Fashion is built from observed recommendations across the fashion sources Reccas tracks. We look for repeated, attributable praise across editors, stylists, creators and testers, then keep the product evidence visible so you can inspect the sources yourself.</p></section></main>";
   return page("/recommendations","Best of Fashion 2026: Most Recommended Clothes, Shoes & Bags",body,"Best of Fashion 2026 by Reccas tracks the clothes, shoes and accessories most consistently recommended by fashion editors, stylists, creators and testers.",200,null,{kind:"collection",breadcrumb:"Best of Fashion"});
 }
+async function recommendationCategoryPage(env,category){
+  var meta=RECOMMENDATION_CATEGORIES[category];if(!meta)return null;
+  var allRecs=await recommendationIndex(env),recs=allRecs.filter(function(r){return recommendationCategory(r)===category});
+  var cards=recs.map(function(r){return "<a class='guideTile' href='/"+esc(r.slug)+"'><div class='eyebrow'>"+esc(r.picks)+" picks · "+esc(r.sources)+" recommendation"+(r.sources===1?"":"s")+"</div><h3>"+esc(r.title)+"</h3><p>"+esc(String(r.description||"Evidence-backed fashion recommendation from Reccas."))+"</p><strong>See the evidence →</strong></a>"}).join("");
+  var body="<main class='wrap'><section class='hero'><span class='eyebrow'>Best of Fashion 2026</span><h1>Best "+esc(meta.label)+"</h1><p>"+esc(meta.description)+" Ranked from attributable recommendations across the fashion sources Reccas tracks.</p></section><section class='section'><h2>"+recs.length+" research-backed guide"+(recs.length===1?"":"s")+"</h2><div class='guideGrid'>"+cards+"</div></section></main>";
+  return page("/recommendations/"+category,"Best "+meta.label+" 2026: Most Recommended "+meta.label,body,"Best "+meta.label+" of 2026, based on observed recommendations from fashion editors, stylists, creators and testers tracked by Reccas.",200,null,{kind:"collection",breadcrumb:"Best "+meta.label});
+}
+
 async function guides(env){
   var reqs=await all(env.DB,"SELECT slug,title,description,event_type FROM requests WHERE slug IS NOT NULL AND slug NOT LIKE 'archived--%' ORDER BY title");
   var edits=await recommendationIndex(env),bySlug=new Map();
@@ -603,7 +645,7 @@ async function sitemap(env){
   var reqs=await all(env.DB,"SELECT id,slug,COALESCE(last_activity_at,created_at) lastmod FROM requests WHERE slug IS NOT NULL AND slug NOT LIKE 'archived--%' ORDER BY slug");
   var tags=await all(env.DB,"SELECT t.slug,MAX(r.last_activity_at) lastmod,COUNT(*) n FROM tags t JOIN request_tags rt ON rt.tag_id=t.id JOIN requests r ON r.id=rt.request_id AND r.status='open' WHERE t.is_indexable=1 GROUP BY t.id,t.slug HAVING COUNT(*)>=3");
   var events=await all(env.DB,"SELECT event_type,MAX(last_activity_at) lastmod FROM requests WHERE event_type IS NOT NULL GROUP BY event_type");
-  var staticPaths=["/","/about","/press","/developers","/privacy","/guides","/recommendations","/what-to-wear-by-temperature","/capsule-wardrobes","/wedding-guest-dresses-by-color","/travel-packing-guides","/outfit-formulas","/best-ballet-flats-under-250"];
+  var staticPaths=["/","/about","/press","/developers","/privacy","/guides","/recommendations","/recommendations/clothing","/recommendations/shoes","/recommendations/bags","/recommendations/accessories","/what-to-wear-by-temperature","/capsule-wardrobes","/wedding-guest-dresses-by-color","/travel-packing-guides","/outfit-formulas","/best-ballet-flats-under-250"];
   var editRows=await all(env.DB,"SELECT slug FROM sourced_shopping_edits ORDER BY slug");editRows.forEach(function(x){staticPaths.push("/"+x.slug)});Object.keys(STATIC_EDITS).forEach(function(slug){staticPaths.push("/"+slug)});
   var set=new Set(staticPaths),entries=[];
   staticPaths.forEach(function(p){if(set.has(p)){entries.push({p:p,last:"2026-09-25"});set.delete(p)}});
@@ -989,6 +1031,7 @@ export default {async fetch(request,env){
   if(path==="/")return home(env);
   if(path==="/guides")return guides(env);
   if(path==="/recommendations")return recommendations(env);
+  if(path.indexOf("/recommendations/")===0){var rc=path.slice("/recommendations/".length),rcp=await recommendationCategoryPage(env,rc);if(rcp)return rcp}
   if(path==="/shopping-edits")return Response.redirect("https://reccas.com/recommendations",301);
   if(path.indexOf("/r/")===0&&path.length>3)return Response.redirect("https://reccas.com/"+path.slice(3),301);
   if(path==="/login"||path==="/signup")return loginPage(request,path);
