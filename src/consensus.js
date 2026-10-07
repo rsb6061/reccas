@@ -18,7 +18,12 @@ export const GUIDE_REDIRECTS = {
   "best-everyday-crossbody-bags": "best-crossbody-bags",
   "best-crossbody-bags-for-travel-anti-theft": "best-crossbody-bags-for-travel",
   "best-luxury-crossbody-bags": "best-designer-crossbody-bags",
-  "best-quiet-luxury-crossbody-bags": "best-designer-crossbody-bags"
+  "best-quiet-luxury-crossbody-bags": "best-designer-crossbody-bags",
+  "best-flats-for-work": "best-work-flats-for-women",
+  "best-crossbody-bags-for-everyday": "best-crossbody-bags",
+  "best-sneakers-for-walking-all-day": "best-walking-sneakers-for-women",
+  "best-jeans-for-short-women": "best-jeans-for-petites",
+  "best-pants-for-travel": "best-travel-pants-for-women"
 };
 const GUIDE_OVERRIDES = {
   "best-crossbody-bags": {
