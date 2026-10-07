@@ -287,12 +287,10 @@ export const STATIC_EDITS={
         "catalogQuery": "Crew Neck T-Shirt",
         "channel3Query": "Uniqlo Crew Neck T-Shirt",
         "preferredDomain": "uniqlo.com",
-        "preferStaticImage": true,
         "requiredTitleTerms": ["crew", "neck", "t-shirt"],
         "excludeTitleTerms": ["dress", "kids", "men", "long-sleeve", "long sleeve"],
         "canonicalUrl": "https://www.uniqlo.com/us/en/products/E424873-000/00?colorDisplayCode=00",
         "fallbackPrice": 19.9,
-        "imageUrl": "https://image.uniqlo.com/UQ/ST3/us/imagesgoods/424873/item/usgoods_00_424873.jpg",
         "summary": "The value consensus pick: a sturdy mid-weight crewneck editors repurchase because it works alone or under layers.",
         "fitNote": "The fabric is heavier and straighter than many fashion tees; that makes it opaque but less drapey.",
         "evidence": [
