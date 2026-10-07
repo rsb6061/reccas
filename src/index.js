@@ -117,7 +117,7 @@ h3{font-size:23px;line-height:1.1;letter-spacing:-.025em}
 .editVisual{position:relative;background:#efeaff;min-height:340px;display:flex;align-items:center;justify-content:center}
 .editVisual img{display:block;width:100%;height:100%;max-height:410px;object-fit:contain;padding:22px}.editVisualFallback{display:flex;align-items:center;justify-content:center;width:100%;min-height:340px;padding:28px;text-align:center;font-family:var(--display);font-size:28px;color:var(--muted)}
 .editRank{position:absolute;top:14px;left:14px;font-weight:700}
-.watchBtn{position:absolute;top:12px;right:12px;z-index:3;width:38px;height:38px;border:1px solid rgba(27,21,60,.13);border-radius:999px;background:rgba(255,255,255,.88);backdrop-filter:blur(8px);display:grid;place-items:center;color:var(--ink);font-size:21px;line-height:1;cursor:pointer;box-shadow:0 4px 16px rgba(27,21,60,.08);transition:transform .16s ease,background .16s ease,border-color .16s ease}
+.watchBtn{position:absolute;top:22px;right:22px;z-index:3;width:38px;height:38px;border:1px solid rgba(27,21,60,.13);border-radius:999px;background:rgba(255,255,255,.92);display:grid;place-items:center;color:var(--ink);font-size:21px;line-height:1;cursor:pointer;box-shadow:0 4px 16px rgba(27,21,60,.06);transition:transform .16s ease,background .16s ease,border-color .16s ease}
 .watchBtn:hover{transform:translateY(-1px);background:#fff;border-color:rgba(27,21,60,.24)}
 .watchBtn.active{background:var(--ink);color:#fff;border-color:var(--ink)}
 .watchBtn span{transform:translateY(-1px)}
@@ -129,7 +129,7 @@ h3{font-size:23px;line-height:1.1;letter-spacing:-.025em}
 .watchModalActions{display:grid;gap:10px;margin-top:20px}
 .watchToast{position:fixed;right:20px;bottom:20px;z-index:80;background:var(--ink);color:#fff;border-radius:999px;padding:11px 15px;font-size:13px;box-shadow:0 12px 34px rgba(27,21,60,.2);opacity:0;transform:translateY(8px);pointer-events:none;transition:.18s}
 .watchToast.show{opacity:1;transform:translateY(0)}
-.editCopy{padding:28px 30px;display:flex;flex-direction:column}
+.editCopy{position:relative;padding:28px 78px 28px 30px;display:flex;flex-direction:column}
 .editTop{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
 .editCopy h2{font-size:34px;line-height:1.02;margin:0}
 .editPrice{font-size:15px;white-space:nowrap;color:#514b65}
@@ -165,7 +165,8 @@ h3{font-size:23px;line-height:1.1;letter-spacing:-.025em}
   .wardrobe-head{display:block}
   .editIntro,.editPick{grid-template-columns:1fr}
   .editIntro{gap:10px}
-  .editCopy{padding:22px 20px}
+  .editCopy{padding:22px 68px 22px 20px}
+  .watchBtn{top:16px;right:16px}
   .drawer{width:100vw}
   .footer-inner{grid-template-columns:1fr}
   .footer-links{justify-content:flex-start}
@@ -532,11 +533,11 @@ async function sourced(env,slug){
     var watchPayload=encodeURIComponent(JSON.stringify({watchKey:watchKey,source:x._channel3?"channel3":"reccas",sourceProductId:x.sourceProductId||null,productId:x.productId||null,brand:x.brand||"",name:x.name||"",productUrl:dest||x.canonicalUrl||"",imageUrl:img||"",guideSlug:slug,price:x.price==null?null:Number(x.price),currency:"USD"}));
     var watchButton="<button class='watchBtn js-price-watch' type='button' aria-label='Track price for "+esc(x.brand+" "+x.name)+"' aria-pressed='false' title='Track price' data-watch='"+watchPayload+"'><span aria-hidden='true'>♡</span></button>";
     var price=x.price==null||x.price===""?"":(typeof x.price==="number"?money(x.price):String(x.price));
-    var action=dest?"Shop"+(price?" "+esc(price):""):"View source";
+    var shopAt=String(x.shopLabel||x.brand||"retailer").trim(),action=dest?"Shop at "+esc(shopAt)+(price?" · "+esc(price):""):"View source";
     var live=x._channel3?(x._affiliate?"Channel3 product · affiliate link":"Channel3 product · no affiliate link"):(x._catalog?(x._affiliate?"Live product · affiliate link":"Live product · no affiliate link"):"Editorially recommended");
     var commerceNote=x._catalog&&!x._affiliate?"<span class='muted' style='font-size:12px'>No affiliate link available; this goes directly to the product.</span>":"";
     var rel=x._affiliate?"sponsored noreferrer":"noreferrer";
-    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+watchButton+visual+"</div><div class='editCopy'><div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div>"+(price?"<span class='editPrice'>"+esc(price)+"</span>":"")+"</div><div class='editLive'>"+esc(live)+" · "+esc(evidence.length)+" recommendation source"+(evidence.length===1?"":"s")+"</div><p class='editSummary'>"+esc(x.summary||"")+"</p><div class='editSources'>"+ev+"</div><p class='editNote'><strong>Worth knowing:</strong> "+esc(x.fitNote||"Check current sizing, materials and availability before buying.")+"</p><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='"+rel+"'>"+action+"</a>":"")+commerceNote+"</div></div></article>";
+    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+visual+"</div><div class='editCopy'>"+watchButton+"<div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div>"+(price?"<span class='editPrice'>"+esc(price)+"</span>":"")+"</div><div class='editLive'>"+esc(live)+" · "+esc(evidence.length)+" recommendation source"+(evidence.length===1?"":"s")+"</div><p class='editSummary'>"+esc(x.summary||"")+"</p><div class='editSources'>"+ev+"</div><p class='editNote'><strong>Worth knowing:</strong> "+esc(x.fitNote||"Check current sizing, materials and availability before buying.")+"</p><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='"+rel+"'>"+action+"</a>":"")+commerceNote+"</div></div></article>";
   }).join("");
   var metrics="<div class='editMetrics'><span><strong>"+esc(e.picks.length)+"</strong> focused picks</span><span><strong>"+esc(totalSources)+"</strong> sourced mentions</span><span><strong>"+esc(e.checkedLabel||"Sep 2026")+"</strong> last checked</span></div>";
   var headline=multiSource>=Math.ceil(e.picks.length/2)?"Consensus, with receipts.":"Editor-backed, with receipts.";
