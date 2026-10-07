@@ -906,20 +906,20 @@ function coverageIntentFromGuide(g){
   var t=String(g&&g.title||g&&g.slug||"").toLowerCase(),slug=String(g&&g.slug||"");
   function has(rx){return rx.test(t+" "+slug)}
   var category="top",terms=[];
-  if(has(/loafer|ballet flat|\bflat\b/)){category="flat";terms=["loafer","flat","ballet","mary jane"]}
-  else if(has(/sneaker|trainer/)){category="shoe";terms=["sneaker","trainer"]}
+  if(has(/loafers?|ballet flats?|\bflats?\b/)){category="flat";terms=["loafer","flat","ballet","mary jane"]}
+  else if(has(/sneakers?|trainers?|walking shoes?|travel shoes?/)){category="shoe";terms=["sneaker","trainer"]}
   else if(has(/ankle boot|knee.high boot|\bboots?\b/)){category="boot";terms=["boot","chelsea","knee","ankle"]}
   else if(has(/heel|pump|slingback/)){category="heel";terms=["heel","pump","slingback","sandal"]}
-  else if(has(/crossbody|handbag|shoulder bag|tote|work bag/)){category="bag";terms=["bag","tote","crossbody","shoulder","handbag"]}
+  else if(has(/crossbod(y|ies)|handbags?|shoulder bags?|totes?|work bags?/)){category="bag";terms=["bag","tote","crossbody","shoulder","handbag"]}
   else if(has(/jean|denim/)){category="jean";terms=["jean","denim"]}
   else if(has(/trouser|work pant|wide.leg pant|travel pant|wrinkle.resistant pant|\bpants?\b/)){category="pant";terms=["pant","trouser"]}
-  else if(has(/cashmere|merino|cardigan|sweater|knit/)){category="knit";terms=["sweater","cardigan","cashmere","merino","knit"]}
+  else if(has(/cashmere|merino|cardigans?|sweaters?|knits?/)){category="knit";terms=["sweater","cardigan","cashmere","merino","knit"]}
   else if(has(/trench|wool coat|\bcoat\b/)){category="coat";terms=["coat","trench"]}
   else if(has(/blazer|packable jacket|puffer|\bjacket\b/)){category="jacket";terms=["jacket","blazer","puffer","shell"]}
   else if(has(/wedding guest dress|cocktail dress|midi dress|work dress|little black dress|\bdress/)){category="dress";terms=["dress","gown"]}
-  else if(has(/midi skirt|slip skirt|\bskirt/)){category="skirt";terms=["skirt"]}
-  else if(has(/legging/)){category="activewear";terms=["legging","tight"]}
-  else if(has(/\bbra\b|underwear|panty|brief|thong/)){category="intimates";terms=["bra","bralette","brief","thong","underwear","panty"]}
+  else if(has(/midi skirts?|slip skirts?|\bskirts?/)){category="skirt";terms=["skirt"]}
+  else if(has(/leggings?/)){category="activewear";terms=["legging","tight"]}
+  else if(has(/\bbras?\b|underwear|panties?|briefs?|thongs?/)){category="intimates";terms=["bra","bralette","brief","thong","underwear","panty"]}
   else if(has(/button.down|t.shirt|\btop\b|blouse|shirt/)){category="top";terms=["shirt","tee","t-shirt","blouse","top"]}
   var query=t.replace(/^the\s+/,"").replace(/^best\s+/,"").replace(/,.*$/,"").replace(/\s+/g," ").trim();
   if(query.indexOf("women")<0&&query.indexOf("womens")<0)query="women "+query;
