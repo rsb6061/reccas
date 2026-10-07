@@ -1,5 +1,6 @@
 import {getCorpus, slugify, verifyKeyOk, FRANCHISE_YEAR} from "./consensus.js";
 
+// Paused: these pages still load but are unlinked, out of the sitemap and hidden from search.
 // People whose own stated recommendations Reccas tracks. These are kept apart from the
 // independent-source count: a person's pick is shown beside it, never added to it.
 const MIN_PICKS_TO_INDEX = 5;
@@ -88,7 +89,7 @@ export function createPeople(h) {
     const people = Array.from((await loadPeople(env)).values()).filter(function (p) { return p.picks.length; }).sort(function (a, b) { return b.picks.length - a.picks.length; });
     const cards = people.map(function (p) { return "<a class='guideTile' href='/people/" + esc(p.slug) + "'><div class='eyebrow'>" + esc(p.kind || "Person") + "</div><h3>" + esc(p.name) + "</h3><p>" + esc(p.knownFor) + "</p><strong>" + plural(p.picks.length, "recommendation") + " →</strong></a>"; }).join("");
     const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>People</span><h1>What the people with taste recommend</h1><p>Stylists, newsletter writers and personalities whose own fashion recommendations Reccas tracks, each linked to where they said it. A person’s pick is shown beside a product’s independent-source count and is never added to it.</p></section><section class='section'>" + (cards ? "<div class='guideGrid'>" + cards + "</div>" : "<p class='muted'>No recommendations recorded yet.</p>") + "</section><section class='editMethod'><span class='eyebrow'>How this works</span><h2>Their words, with the receipt.</h2><p>Reccas records only what a person recommends in their own words in an interview, article or newsletter. It leaves out anything from a brand they own or are paid to promote, and anything they were only photographed wearing. Nobody listed here is affiliated with Reccas or has endorsed it. <a class='plainLink' href='/methodology'>Methodology</a>.</p></section></main>";
-    return page("/people", "What Stylists, Writers and Personalities Recommend", body, "The fashion products that stylists, newsletter writers and personalities recommend in their own words, each linked to where they said it.", 200, people.length >= 3 ? null : "noindex, follow", {kind: "collection", breadcrumb: "People"});
+    return page("/people", "What Stylists, Writers and Personalities Recommend", body, "The fashion products that stylists, newsletter writers and personalities recommend in their own words, each linked to where they said it.", 200, "noindex, follow", {kind: "collection", breadcrumb: "People"});
   }
 
   async function person(env, slug) {
@@ -102,7 +103,7 @@ export function createPeople(h) {
       return "<tr><td>" + (prod ? "<a class='plainLink' href='/products/" + esc(prod.key) + "'>" + esc(prod.brand + " " + prod.name) + "</a>" : esc(x.brand + " " + x.name)) + "</td><td>" + esc(x.label) + "</td><td><a class='plainLink' href='" + esc(x.url) + "' target='_blank' rel='noreferrer'>" + esc(x.source) + " ↗</a>" + (x.date ? "<div class='rankMeta'>" + esc(x.date) + "</div>" : "") + "</td><td>" + (n ? plural(n, "independent source") : "<span class='rankMeta'>Not in a Reccas category yet</span>") + "</td></tr>";
     }).join("");
     const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>" + esc(p.kind || "Person") + "</span><h1>What " + esc(p.name) + " recommends</h1><p>" + esc(p.knownFor ? p.knownFor + ". " : "") + plural(p.picks.length, "fashion product") + " " + esc(p.name) + " has recommended in their own words" + (overlap ? ", " + overlap + " of which independent editors also recommend" : "") + ".</p><p class='footNote' style='margin-top:14px'>" + disclaimer(p.name) + "</p></section><section class='section'><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Product</th><th>What they said</th><th>Where they said it</th><th>Editors agree?</th></tr></thead><tbody>" + rows + "</tbody></table></div><p style='margin-top:20px'><a class='plainLink' href='/people'>Everyone Reccas tracks →</a></p></section></main>";
-    return page("/people/" + slug, "What " + p.name + " Recommends: " + p.picks.length + " Fashion Picks (" + FRANCHISE_YEAR + ")", body, "The fashion products " + p.name + " has recommended in their own words, each linked to where they said it, and which ones independent editors also recommend.", 200, p.picks.length >= MIN_PICKS_TO_INDEX ? null : "noindex, follow", {kind: "collection", breadcrumb: p.name});
+    return page("/people/" + slug, "What " + p.name + " Recommends: " + p.picks.length + " Fashion Picks (" + FRANCHISE_YEAR + ")", body, "The fashion products " + p.name + " has recommended in their own words, each linked to where they said it, and which ones independent editors also recommend.", 200, "noindex, follow", {kind: "collection", breadcrumb: p.name});
   }
 
   return {index: index, person: person};

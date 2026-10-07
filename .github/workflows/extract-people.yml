@@ -2,8 +2,6 @@ name: Extract people
 
 # Reads the articles and newsletters where tracked people state their own recommendations.
 on:
-  schedule:
-    - cron: "41 14 3 * *"
   workflow_dispatch:
     inputs:
       force:

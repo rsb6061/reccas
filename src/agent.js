@@ -22,7 +22,6 @@ export const AGENT_TOOLS = [
   {name: "get_product_recommendations", title: "Who recommends a product", description: "Every source that recommends a specific product: publication, writer where known, how they described it, when the source was last updated, and a link to the original. Use for 'who recommends X' or 'is X still recommended'.", inputSchema: {type: "object", properties: {product: {type: "string", description: "Brand and product name"}}, required: ["product"], additionalProperties: false}},
   {name: "get_source_recommendations", title: "What a source recommends", description: "The products a given publication or creator recommends in the categories Reccas tracks, with links to the original articles.", inputSchema: {type: "object", properties: {source: {type: "string", description: "Publication or creator name, for example Vogue"}}, required: ["source"], additionalProperties: false}},
   {name: "get_most_recommended_brands", title: "Most recommended brands", description: "Women's fashion brands ranked by how many independent sources recommend at least one of their products, optionally within one product type such as jeans or sneakers.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}, limit: {type: "integer", minimum: 1, maximum: 30}}, additionalProperties: false}},
-  {name: "get_person_recommendations", title: "What a person recommends", description: "The fashion products a tracked stylist, newsletter writer or personality recommends in their own words, each linked to where they said it, with whether independent editors also recommend it.", inputSchema: {type: "object", properties: {person: {type: "string", description: "The person's name"}}, required: ["person"], additionalProperties: false}},
   {name: "list_categories", title: "List Best of Fashion categories", description: "All Best of Fashion " + FRANCHISE_YEAR + " categories with their current winner or leader.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}}, additionalProperties: false}}
 ];
 
@@ -91,7 +90,7 @@ export async function agentCall(name, a, env) {
   return null;
 }
 
-const REST = {"most-recommended": "get_most_recommended", "search": "search_recommendations", "category": "get_category", "product": "get_product_recommendations", "source": "get_source_recommendations", "categories": "list_categories", "brands": "get_most_recommended_brands", "person": "get_person_recommendations"};
+const REST = {"most-recommended": "get_most_recommended", "search": "search_recommendations", "category": "get_category", "product": "get_product_recommendations", "source": "get_source_recommendations", "categories": "list_categories", "brands": "get_most_recommended_brands"};
 export async function agentRest(path, url, env) {
   const tool = REST[path.replace("/_api/agent/", "")];
   if (!tool) return null;
