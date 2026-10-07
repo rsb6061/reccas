@@ -1,8 +1,6 @@
 name: Check Reccas
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -14,5 +12,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm ci
       - run: npm run check

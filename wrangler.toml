@@ -1,5 +1,6 @@
 name = "reccas"
 main = "src/index.js"
+account_id = "fa11326492b5746f2276e22286c4d33d"
 compatibility_date = "2026-09-21"
 compatibility_flags = ["nodejs_compat"]
 
