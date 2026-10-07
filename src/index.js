@@ -3,6 +3,7 @@ import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
+import {catalogExpansionTick,catalogExpansionStatus} from "./catalog-expansion.js";
 const STATIC_COLLECTIONS = {
   "/what-to-wear-by-temperature":["What to Wear by Temperature","Practical outfit ideas organized by temperature and weather."],
   "/capsule-wardrobes":["Capsule Wardrobes","Seasonal capsules built around complete, repeatable outfits."],
@@ -893,10 +894,11 @@ const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichSt
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
 async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
 const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
-export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await snapshotProducts(env,r.corpus);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
+export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{await catalogExpansionTick(env,8);var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await snapshotProducts(env,r.corpus);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
   var u=new URL(request.url),path=u.pathname.replace(/\/+$/,"")||"/";
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
-  if(path==="/health")return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}});
+  if(path==="/health"){ctx.waitUntil(catalogExpansionTick(env,6).catch(function(){}));return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}})};
+  if(path==="/_api/catalog-expansion/status"&&request.method==="GET")return Response.json(await catalogExpansionStatus(env),{headers:{"Cache-Control":"no-store"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: OAI-SearchBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: GPTBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\n\nSitemap: https://reccas.com/sitemap.xml\n",{headers:{"content-type":"text/plain; charset=utf-8","cache-control":"public, max-age=3600"}});
   if(path==="/sitemap.xml"||path==="/_api/sitemap")return sitemap(env);
   var machine=machineResource(path);if(machine)return machine;
