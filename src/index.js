@@ -508,7 +508,7 @@ async function channel3StaticPick(env,pick){
       if(channel3Image(pr))score+=2;if(channel3BestOffer(pr,pick))score+=2;
       if(score>bestScore){best=pr;bestScore=score}
     }
-    if(pick._anchor&&pick._anchor.catalog_id){var same=ps.find(function(z){return String(z.id)===String(pick._anchor.catalog_id)});if(!same)return null;best=same}
+    if(pick._anchor&&pick._anchor.catalog_id&&String(pick._anchor.catalog_id).indexOf("db:")!==0){var same=ps.find(function(z){return String(z.id)===String(pick._anchor.catalog_id)});if(!same)return null;best=same}
     if(!best)return null;
     var offer=pick.skipChannel3Offer?null:channel3BestOffer(best,pick),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
     var exactImg=pick.preferStaticImage&&pick.imageUrl?pick.imageUrl:null;
@@ -523,7 +523,7 @@ async function enrichStaticPick(env,pick){
     var base="SELECT p.id,p.title,p.price,p.image_url,p.canonical_url,b.name brand_name,(SELECT po.affiliate_url FROM product_offers po WHERE po.product_id=p.id AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL ORDER BY po.commission_rate DESC LIMIT 1) affiliate_url FROM products p LEFT JOIN brands b ON b.id=p.brand_id WHERE p.is_product_page_live=1 AND lower(p.title) LIKE ? AND lower(COALESCE(b.name,'')) LIKE ?";
     var row=null;try{row=await env.DB.prepare(base+" ORDER BY p.updated_at DESC LIMIT 8").bind(pattern,brand).all()}catch(_){}
     var candidates=row&&row.results||[],match=candidates.find(function(r){return productTitleMatches(r.title,x)});
-    if(match){x.productId=match.id;x.price=match.price==null?x.fallbackPrice:Number(match.price);x.imageUrl=match.image_url||x.imageUrl;x.shopUrl=match.affiliate_url||match.canonical_url||x.canonicalUrl||null;x._catalog=true;x._channel3=false;x._affiliate=!!match.affiliate_url;return x}
+    if(match){x.productId=match.id;x.price=match.price==null?x.fallbackPrice:Number(match.price);x.imageUrl=match.image_url||x.imageUrl;x.shopUrl=match.affiliate_url||match.canonical_url||x.canonicalUrl||null;x._catalog=true;x._channel3=false;x._affiliate=!!match.affiliate_url;x._title=String(match.title||"");x._brand=String(match.brand_name||"");return x}
   }
   x.price=x.price==null?x.fallbackPrice:x.price;x.shopUrl=x.shopUrl||x.canonicalUrl||null;x._catalog=!!x.shopUrl;x._channel3=false;x._affiliate=false;return x;
 }
