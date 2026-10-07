@@ -36,7 +36,7 @@ async function main() {
         const productKey = slugify(p.brand + " " + p.name);
         if (!productKey || seen.has(productKey)) continue;
         seen.add(productKey);
-        const validated = mentions(page.text, p.brand, p.name), sponsored = p.sponsored === true || own.includes(compact(p.brand));
+        const validated = mentions(page.text, p.brand, p.name), sponsored = p.sponsored === true || own.includes(compact(p.brand)) || /^amazon/i.test(p.brand);
         if (!validated) total.unvalidated++; else if (sponsored) total.sponsored++; else total.kept++;
         rows.push({brand: p.brand, name: p.name, productKey, matchedProductKey: matchProduct(p.brand, p.name, known), label: p.label, sponsored, validated});
       }
