@@ -551,6 +551,7 @@ export async function trendingData(env, days) {
 // Only live catalog prices are logged; a price typed into a guide is not a price observation.
 let triedToday = {day: "", keys: new Set()};
 export async function syncPrices(env, corpus, enrichStaticPick, limit) {
+  const unresolved = [];
   const today = new Date().toISOString().slice(0, 10), stmts = [], seenKeys = {}, tried = triedToday.day === today ? triedToday.keys : (triedToday = {day: today, keys: new Set()}).keys;
   await ensureObservationTables(env);
   const cols = ((await env.DB.prepare("PRAGMA table_info(price_observations)").all()).results || []).map(function (c) { return c.name; });
@@ -572,13 +573,14 @@ export async function syncPrices(env, corpus, enrichStaticPick, limit) {
       // The record can come from the live catalog or from the site's own product table.
       const recordId = live && live._channel3 && live.sourceProductId ? String(live.sourceProductId) : (live && live._catalog && live.productId ? "db:" + live.productId : null);
       if (recordId && live.shopUrl && sure) stmts.push(env.DB.prepare("INSERT INTO product_catalog (product_key,catalog_id,title,brand,image_url,url,price,compare_at,affiliate,anchored_on,checked_on) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(product_key) DO UPDATE SET title=excluded.title,image_url=excluded.image_url,url=excluded.url,price=excluded.price,compare_at=excluded.compare_at,affiliate=excluded.affiliate,checked_on=excluded.checked_on WHERE product_catalog.catalog_id=excluded.catalog_id").bind(prod.key, recordId, String(live._title || "").slice(0, 300), String(live._brand || "").slice(0, 120), live.imageUrl || null, live.shopUrl, parsePrice(live.price), live.compareAt != null ? live.compareAt : null, live._affiliate ? 1 : 0, today, today));
+      if (!recordId || !live.shopUrl || !sure) unresolved.push({product: prod.brand + " " + prod.name, found: live ? String(live._brand || "") + " / " + String(live._title || "") : null, from: live && live._channel3 ? "catalog" : live && live._catalog ? "product table" : "nothing", hasLink: !!(live && live.shopUrl), sameItem: sure});
       if (!sure) continue;
       const was = live && live.compareAt != null && price != null && live.compareAt > price ? live.compareAt : null;
       if (live && live._channel3 && price != null) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO price_observations (product_key,observed_on,price,currency,merchant,compare_at) VALUES (?,?,?,?,?,?)").bind(prod.key, today, price, "USD", host(live.shopUrl) || null, was));
     } catch (_) {}
   }
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
-  return {saved: stmts.length, tried: queue.length, remaining: corpus.productList.filter(pending).length, anchored: anchors.size, priceFields: Object.keys(seenKeys)};
+  return {saved: stmts.length, tried: queue.length, remaining: corpus.productList.filter(pending).length, anchored: anchors.size, unresolved: unresolved, priceFields: Object.keys(seenKeys)};
 }
 export async function adminSyncPrices(request, env, enrichStaticPick) {
   if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
