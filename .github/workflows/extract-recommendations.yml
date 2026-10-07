@@ -3,6 +3,8 @@ name: Extract recommendations
 # Reads cited articles and records every product each one recommends. Uses the Worker's AI key,
 # so the number of articles per run is capped. Runs monthly, or by hand with a chosen limit.
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: "41 12 3 * *"
   workflow_dispatch:
