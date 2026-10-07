@@ -613,12 +613,22 @@ export async function syncMentionsOncePerDay(env) {
     await syncMentions(env);
   } catch (_) { lastMentionSyncDay = ""; }
 }
+function productAliases(p) {
+  const out = [], seen = new Set(), pick = p && p.pick || {}, anchor = pick && pick._anchor || {};
+  [p && p.name, pick.catalogQuery, pick.channel3Query, anchor.title].forEach(function (v) {
+    v = String(v || "").trim();
+    const k = compact(v);
+    if (!v || !k || seen.has(k)) return;
+    seen.add(k); out.push(v);
+  });
+  return out;
+}
 export async function mentionsFeed(env) {
   const corpus = await getCorpus(env), mentions = [];
   corpus.productList.forEach(function (prod) {
     prod.evidence.forEach(function (ev) { mentions.push({key: mentionKey(prod.key, ev), productKey: prod.key, brand: prod.brand, name: prod.name, guideSlug: ev.guideSlug || null, source: ev.source, independent: ev.independent, label: ev.label, url: ev.url}); });
   });
-  const products = corpus.productList.map(function (p) { return {key: p.key, brand: p.brand, name: p.name}; });
+  const products = corpus.productList.map(function (p) { return {key: p.key, brand: p.brand, name: p.name, aliases: productAliases(p)}; });
   return Response.json({generated: new Date().toISOString(), stats: corpus.stats, products: products, mentions: mentions}, {headers: {"Cache-Control": "public, max-age=60"}});
 }
 export function verifyKeyOk(request, env) {
@@ -686,6 +696,31 @@ export async function extractionStatus(request, env) {
   await ensureCandidates(env);
   const runs = (await env.DB.prepare("SELECT url,extracted_on FROM extraction_runs").all()).results || [];
   return Response.json({runs: runs});
+}
+export async function rematchCandidates(request, env) {
+  if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
+  await ensureCandidates(env);
+  const corpus = await getCorpus(env);
+  const known = corpus.productList.map(function (p) { return {key: p.key, brand: p.brand, name: p.name, aliases: productAliases(p)}; });
+  const rows = (await env.DB.prepare("SELECT id,brand,name FROM mention_candidates WHERE validated=1 AND status='new_product' AND matched_product_key IS NULL ORDER BY extracted_on DESC,id DESC LIMIT 1200").all()).results || [];
+  const stmts = []; let matched = 0, ambiguous = 0, unmatched = 0;
+  rows.forEach(function (r) {
+    const brand = compact(r.brand), hits = [], seen = new Set();
+    known.forEach(function (p) {
+      if (compact(p.brand) !== brand) return;
+      const aliases = p.aliases && p.aliases.length ? p.aliases : [p.name];
+      if (!aliases.some(function (a) { return sameProductName(a, r.name); })) return;
+      if (!seen.has(p.key)) { seen.add(p.key); hits.push(p); }
+    });
+    if (hits.length === 1) {
+      matched++;
+      stmts.push(env.DB.prepare("UPDATE mention_candidates SET status='accepted',matched_product_key=? WHERE id=? AND status='new_product' AND matched_product_key IS NULL").bind(hits[0].key, r.id));
+    } else if (hits.length > 1) ambiguous++;
+    else unmatched++;
+  });
+  for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
+  if (stmts.length) resetCorpusCache();
+  return Response.json({ok: true, reviewed: rows.length, matched: matched, ambiguous: ambiguous, unmatched: unmatched});
 }
 export async function saveMentionChecks(request, env) {
   if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
