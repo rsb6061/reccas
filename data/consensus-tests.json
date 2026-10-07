@@ -1,0 +1,91 @@
+{
+  "_about": "Private tests of whether counting agreement between publications works outside fashion. Nothing here is shown on the site or saved to the database.",
+  "balsamic vinegar": [
+    {
+      "source": "Sporked",
+      "url": "https://sporked.com/article/best-balsamic-vinegar/"
+    },
+    {
+      "source": "America's Test Kitchen",
+      "url": "https://www.americastestkitchen.com/taste_tests/1609-supermarket-balsamic-vinegar"
+    },
+    {
+      "source": "America's Test Kitchen (high-end)",
+      "url": "https://www.americastestkitchen.com/taste_tests/342-high-end-balsamic-vinegar"
+    },
+    {
+      "source": "Forbes Vetted",
+      "url": "https://www.forbes.com/sites/forbes-personal-shopper/article/best-balsamic-vinegar/"
+    },
+    {
+      "source": "Consumer Reports",
+      "url": "https://www.consumerreports.org/health/vinegars/best-balsamic-vinegars-under-20-dollars-a7083479654/"
+    },
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/food/groceries/best-balsamic-vinegar-2024-rcna168388"
+    },
+    {
+      "source": "Parade",
+      "url": "https://parade.com/food/best-balsamic-vinegar"
+    },
+    {
+      "source": "Eat This, Not That",
+      "url": "https://www.eatthis.com/best-balsamic-vinegars-chefs/"
+    },
+    {
+      "source": "The Kitchn",
+      "url": "https://www.thekitchn.com/balsamic-vinegar-shopping-tips-food-experts-italy-23653291"
+    },
+    {
+      "source": "Chef's Pencil",
+      "url": "https://www.chefspencil.com/best-12-balsamic-vinegars/"
+    }
+  ],
+  "olive oil": [
+    {
+      "source": "Sporked",
+      "url": "https://sporked.com/article/best-olive-oil/"
+    },
+    {
+      "source": "The Kitchn",
+      "url": "https://www.thekitchn.com/best-grocery-store-olive-oil-23157049"
+    },
+    {
+      "source": "Taste of Home",
+      "url": "https://www.tasteofhome.com/article/best-olive-oil-brands/"
+    },
+    {
+      "source": "Parade",
+      "url": "https://parade.com/food/best-olive-oil-brands"
+    },
+    {
+      "source": "Food Network",
+      "url": "https://www.foodnetwork.com/how-to/packages/shopping/product-reviews/best-olive-oils"
+    },
+    {
+      "source": "America's Test Kitchen",
+      "url": "https://www.americastestkitchen.com/taste_tests/2649-the-best-supermarket-extra-virgin-olive-oil"
+    },
+    {
+      "source": "America's Test Kitchen (premium)",
+      "url": "https://www.americastestkitchen.com/taste_tests/2646"
+    },
+    {
+      "source": "Forbes Vetted",
+      "url": "https://www.forbes.com/sites/forbes-personal-shopper/article/best-olive-oils/"
+    },
+    {
+      "source": "Consumer Reports",
+      "url": "https://www.consumerreports.org/health/cooking-oils/how-to-choose-a-good-extra-virgin-olive-oil-a8557720032/"
+    },
+    {
+      "source": "Eat This, Not That",
+      "url": "https://www.eatthis.com/best-olive-oil-brands-according-to-chefs/"
+    },
+    {
+      "source": "Epicurious",
+      "url": "https://www.epicurious.com/ingredients/the-absolute-best-extra-virgin-olive-oil-for-cooking-article"
+    }
+  ]
+}
