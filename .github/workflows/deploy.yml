@@ -53,3 +53,15 @@ jobs:
               exit 1
             fi
           done
+      - name: Complete targeted catalog expansion
+        run: |
+          for batch in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            body=$(curl -fsS "https://reccas.com/health?expand=targeted-fashion-v1-2026-10-07&run=${GITHUB_SHA}-${batch}")
+            echo "$body"
+            if echo "$body" | grep -q '"complete":true'; then
+              break
+            fi
+          done
+          final=$(curl -fsS "https://reccas.com/_api/catalog-expansion/status?run=${GITHUB_SHA}")
+          echo "Final catalog expansion status: $final"
+          echo "$final" | grep -q '"complete":true'
