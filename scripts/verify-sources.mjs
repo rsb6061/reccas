@@ -1,8 +1,6 @@
 // Re-reads every source article Reccas cites and records whether it still names the product.
 // Writes results to D1 (mention_checks). Nothing on the site changes when a mention is not found;
 // those rows are a review queue.
-import {writeFileSync} from "node:fs";
-import {execFileSync} from "node:child_process";
 
 const SITE = process.env.RECCAS_SITE || "https://reccas.com";
 const DRY_RUN = process.env.DRY_RUN === "1";
@@ -49,7 +47,20 @@ async function fetchPage(url) {
     return {status: "blocked", detail: String(e && e.name || e).slice(0, 60)};
   }
 }
-const q = (v) => v == null ? "NULL" : "'" + String(v).replace(/'/g, "''") + "'";
+// Results go through the Worker, which owns the database; the key is rotated by the workflow each run.
+async function save(day, rows) {
+  const key = process.env.VERIFY_KEY;
+  if (!key) throw new Error("VERIFY_KEY is not set");
+  for (let i = 0; i < rows.length; i += 100) {
+    const body = JSON.stringify({day, rows: rows.slice(i, i + 100)});
+    for (let attempt = 1; ; attempt++) {
+      const r = await fetch(SITE + "/_api/admin/mention-checks", {method: "POST", headers: {"content-type": "application/json", "x-verify-key": key}, body});
+      if (r.ok) break;
+      if (attempt >= 8) throw new Error("Could not save results: HTTP " + r.status);
+      await new Promise((done) => setTimeout(done, 10000));
+    }
+  }
+}
 
 async function main() {
   const res = await fetch(SITE + "/_api/mentions.json", {headers: {accept: "application/json"}});
@@ -75,15 +86,10 @@ async function main() {
     }
   }
   await Promise.all(Array.from({length: CONCURRENCY}, worker));
-  const sql = ["CREATE TABLE IF NOT EXISTS mention_checks (mention_key TEXT PRIMARY KEY,product_key TEXT NOT NULL,guide_slug TEXT,source TEXT,url TEXT,status TEXT NOT NULL,detail TEXT,checked_on TEXT NOT NULL,verified_on TEXT);", "CREATE INDEX IF NOT EXISTS idx_mention_checks_guide ON mention_checks(guide_slug);", "CREATE INDEX IF NOT EXISTS idx_mention_checks_product ON mention_checks(product_key);"];
-  for (const {m, status, detail} of rows) {
-    const verified = status === "verified" ? q(today) : "NULL";
-    sql.push(`INSERT INTO mention_checks (mention_key,product_key,guide_slug,source,url,status,detail,checked_on,verified_on) VALUES (${q(m.key)},${q(m.productKey)},${q(m.guideSlug)},${q(m.source)},${q(m.url)},${q(status)},${q(detail)},${q(today)},${verified}) ON CONFLICT(mention_key) DO UPDATE SET status=excluded.status,detail=excluded.detail,checked_on=excluded.checked_on,guide_slug=excluded.guide_slug,verified_on=COALESCE(excluded.verified_on,mention_checks.verified_on);`);
-  }
   console.log(`Checked ${urls.length} source pages covering ${rows.length} mentions:`, JSON.stringify(tally));
   for (const r of rows.filter((x) => x.status !== "verified")) console.log(`  ${r.status.padEnd(9)} ${r.m.source} -> ${r.m.brand} ${r.m.name}${r.detail ? " (" + r.detail + ")" : ""}`);
   if (DRY_RUN) return;
-  writeFileSync("mention-checks.sql", sql.join("\n"));
-  execFileSync("npx", ["wrangler", "d1", "execute", "reccas", "--remote", "--yes", "--file", "mention-checks.sql"], {stdio: "inherit"});
+  await save(today, rows.map(({m, status, detail}) => ({key: m.key, productKey: m.productKey, guideSlug: m.guideSlug, source: m.source, url: m.url, status, detail})));
+  console.log("Saved " + rows.length + " results.");
 }
 if (import.meta.url === "file://" + process.argv[1]) main().catch((e) => { console.error(e); process.exit(1); });

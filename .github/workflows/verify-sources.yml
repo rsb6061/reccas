@@ -23,7 +23,13 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - name: Check sources and record results
+      - name: Rotate the results key
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          KEY=$(openssl rand -hex 32)
+          echo "::add-mask::$KEY"
+          echo "$KEY" | npx wrangler secret put VERIFY_KEY
+          echo "VERIFY_KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Check sources and record results
         run: node scripts/verify-sources.mjs

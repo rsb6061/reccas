@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,navCategories,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed} from "./consensus.js";
+import {createPages,getGuide,guideIndex,navCategories,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks} from "./consensus.js";
 import {confirmSignup,sendPriceDropAlerts,createUnsubscribe} from "./email.js";
 const STATIC_COLLECTIONS = {
   "/what-to-wear-by-temperature":["What to Wear by Temperature","Practical outfit ideas organized by temperature and weather."],
@@ -933,6 +933,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(request.method==="GET"&&ctx){var aiRef=aiReferrer(request);if(aiRef)ctx.waitUntil(logAiReferral(env,aiRef,path))}
   if(path==="/_api/subscribe"&&request.method==="POST")return subscribe(request,env,ctx,confirmSignup);
   if(path==="/_api/mentions.json"&&request.method==="GET")return mentionsFeed(env);
+  if(path==="/_api/admin/mention-checks"&&request.method==="POST")return saveMentionChecks(request,env);
   if(path==="/unsubscribe"&&(request.method==="GET"||request.method==="POST"))return unsubscribePage(request,env);
   if(path==="/")return pages.home(env);
   if(path==="/guides")return guides(env);

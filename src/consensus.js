@@ -275,6 +275,26 @@ export async function mentionsFeed(env) {
   });
   return Response.json({generated: new Date().toISOString(), stats: corpus.stats, mentions: mentions}, {headers: {"Cache-Control": "public, max-age=300"}});
 }
+export async function saveMentionChecks(request, env) {
+  const expected = String(env.VERIFY_KEY || ""), given = String(request.headers.get("x-verify-key") || "");
+  let diff = expected.length ^ given.length;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i % (given.length || 1));
+  if (expected.length < 32 || diff !== 0) return Response.json({error: "Not authorized"}, {status: 401});
+  let b = {};
+  try { b = await request.json(); } catch (_) {}
+  const day = String(b.day || ""), rows = Array.isArray(b.rows) ? b.rows.slice(0, 500) : [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return Response.json({error: "Bad day"}, {status: 400});
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS mention_checks (mention_key TEXT PRIMARY KEY,product_key TEXT NOT NULL,guide_slug TEXT,source TEXT,url TEXT,status TEXT NOT NULL,detail TEXT,checked_on TEXT NOT NULL,verified_on TEXT)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mention_checks_guide ON mention_checks(guide_slug)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mention_checks_product ON mention_checks(product_key)")
+  ]);
+  const stmts = rows.filter(function (r) { return r && r.key && r.productKey && ["verified", "not_found", "blocked"].indexOf(r.status) >= 0; }).map(function (r) {
+    return env.DB.prepare("INSERT INTO mention_checks (mention_key,product_key,guide_slug,source,url,status,detail,checked_on,verified_on) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(mention_key) DO UPDATE SET status=excluded.status,detail=excluded.detail,checked_on=excluded.checked_on,guide_slug=excluded.guide_slug,verified_on=COALESCE(excluded.verified_on,mention_checks.verified_on)").bind(String(r.key).slice(0, 1200), String(r.productKey).slice(0, 300), r.guideSlug || null, r.source || null, r.url || null, r.status, r.detail || null, day, r.status === "verified" ? day : null);
+  });
+  for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
+  return Response.json({ok: true, saved: stmts.length});
+}
 async function mentionChecks(env, column, value) {
   const out = new Map();
   try {
