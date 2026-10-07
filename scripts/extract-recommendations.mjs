@@ -37,11 +37,15 @@ function articleText(html) {
   const cleaned = String(html).replace(/<(script|style|svg|noscript|nav|footer|header|form|aside)[\s\S]*?<\/\1>/gi, " ");
   return visibleText(cleaned).replace(/&amp;/g, "&").replace(/&#x27;|&#39;|&rsquo;/g, "'").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim().slice(0, 48000);
 }
+// A freshly rotated key can take a moment to reach every location, so an unauthorised answer is retried.
 async function api(path, options) {
-  const r = await fetch(SITE + path, Object.assign({}, options, {headers: Object.assign({"x-verify-key": KEY, "content-type": "application/json"}, options && options.headers)}));
-  let body = {};
-  try { body = await r.json(); } catch (_) {}
-  return {ok: r.ok, status: r.status, body};
+  for (let attempt = 1; ; attempt++) {
+    const r = await fetch(SITE + path, Object.assign({}, options, {headers: Object.assign({"x-verify-key": KEY, "content-type": "application/json"}, options && options.headers)}));
+    let body = {};
+    try { body = await r.json(); } catch (_) {}
+    if (r.status !== 401 || attempt >= 6) return {ok: r.ok, status: r.status, body};
+    await new Promise((done) => setTimeout(done, 8000));
+  }
 }
 async function waitForKey() {
   for (let attempt = 1; attempt <= 8; attempt++) {
