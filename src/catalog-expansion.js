@@ -1,4 +1,4 @@
-export const CATALOG_EXPANSION_VERSION = "targeted-fashion-v1-2026-10-07";
+export const CATALOG_EXPANSION_VERSION = "targeted-fashion-v2-brands-2026-10-07";
 
 const TARGETS = [
   ["women loafers","flat",["loafer"]],
@@ -109,6 +109,57 @@ async function updateDynamic(env,table,info,map,whereSql,whereArgs){
   var args=cols.map(function(k){return row[k]}).concat(whereArgs||[]);
   var st=env.DB.prepare(sql);st=st.bind.apply(st,args);await st.run();
 }
+const BLOCKED_COMMERCE_DOMAINS=new Set([
+  "amazon.com","nordstrom.com","zappos.com","shopbop.com","revolve.com","bloomingdales.com","saksfifthavenue.com",
+  "saks.com","macys.com","farfetch.com","ssense.com","net-a-porter.com","walmart.com","target.com","ebay.com",
+  "etsy.com","poshmark.com","therealreal.com","neimanmarcus.com","bergdorfgoodman.com","selfridges.com"
+]);
+function blockedCommerceDomain(host){
+  host=domainOnly(host);
+  for(const d of BLOCKED_COMMERCE_DOMAINS)if(host===d||host.endsWith("."+d))return true;
+  return false;
+}
+function brandWebsiteHint(product){
+  var b=product&&product.brands&&product.brands[0]||{},v=b.website||b.url||b.domain||b.site||"";
+  return domainOnly(v);
+}
+function strongBrandDomainMatch(brandName,host){
+  host=domainOnly(host);if(!host||blockedCommerceDomain(host))return false;
+  var bc=compact(brandName);if(bc.length<3)return false;
+  var hc=compact(host.replace(/\.[a-z]{2,}$/i,""));
+  if(hc.indexOf(bc)>=0||bc.indexOf(hc)>=0)return true;
+  var tokens=norm(brandName).split(/\s+/).filter(function(x){return x.length>=3&&["the","and","co","company","new","york"].indexOf(x)<0});
+  if(tokens.length<2)return false;
+  var matched=tokens.filter(function(x){return hc.indexOf(compact(x))>=0}).length;
+  return matched>=2&&matched===tokens.length;
+}
+function inferredOfficialOffer(product,brandName){
+  var hinted=brandWebsiteHint(product),offers=(product&&product.offers||[]).filter(function(o){return o&&o.url&&Number(o.max_commission_rate||0)>0});
+  var candidates=offers.filter(function(o){
+    var d=domainOnly(o.domain||o.url||"");if(!d||blockedCommerceDomain(d))return false;
+    if(hinted&&(d===hinted||d.endsWith("."+hinted)||hinted.endsWith("."+d)))return true;
+    return strongBrandDomainMatch(brandName,d);
+  });
+  candidates.sort(function(a,b){return Number(b.max_commission_rate||0)-Number(a.max_commission_rate||0)});
+  return candidates[0]||null;
+}
+async function ensureApprovedBrand(env,product,brands,brandInfo){
+  var gender=String(product&&product.gender||"").toLowerCase();
+  if(gender&&gender!=="female"&&gender!=="women"&&gender!=="woman"&&gender!=="unisex")return{brand:null,kind:"skipped"};
+  var name=brandOf(product).trim(),key=compact(name);if(!name||!key)return{brand:null,kind:"skipped"};
+  var known=brands.get(key);if(known)return{brand:known,kind:"known"};
+  var offer=inferredOfficialOffer(product,name);if(!offer)return{brand:null,kind:"skipped"};
+  var host=domainOnly(offer.domain||offer.url||""),website="https://"+host,now=new Date().toISOString();
+  var existing=await env.DB.prepare("SELECT id,name,website,is_active FROM brands WHERE lower(name)=lower(?) LIMIT 1").bind(name).first();
+  if(existing&&existing.id){
+    await updateDynamic(env,"brands",brandInfo,{website:existing.website||website,is_active:1,updated_at:now},"id=?",[existing.id]);
+    var refreshed={id:existing.id,name:existing.name||name,website:existing.website||website,is_active:1};
+    brands.set(key,refreshed);return{brand:refreshed,kind:"reactivated"};
+  }
+  var ins=await insertDynamic(env,"brands",brandInfo,{name:name,website:website,is_active:1,slug:norm(name).replace(/\s+/g,"-"),created_at:now,updated_at:now});
+  if(!ins.ok||ins.id==null)return{brand:null,kind:"skipped"};
+  var created={id:ins.id,name:name,website:website,is_active:1};brands.set(key,created);return{brand:created,kind:"added"};
+}
 function bestOfficialOffer(product,brand){
   var official=domainOnly(brand.website),offers=(product&&product.offers||[]).filter(function(o){
     if(!o||!o.url||Number(o.max_commission_rate||0)<=0)return false;
@@ -125,10 +176,12 @@ function bestOfficialOffer(product,brand){
 }
 async function ensureState(env){
   await env.DB.prepare("CREATE TABLE IF NOT EXISTS catalog_expansion_runs (version TEXT PRIMARY KEY,next_index INTEGER NOT NULL DEFAULT 0,added INTEGER NOT NULL DEFAULT 0,updated INTEGER NOT NULL DEFAULT 0,skipped INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0,last_error TEXT,updated_at TEXT NOT NULL,completed_at TEXT)").run();
+  try{await env.DB.prepare("ALTER TABLE catalog_expansion_runs ADD COLUMN brands_added INTEGER NOT NULL DEFAULT 0").run()}catch(_){}
+  try{await env.DB.prepare("ALTER TABLE catalog_expansion_runs ADD COLUMN brands_reactivated INTEGER NOT NULL DEFAULT 0").run()}catch(_){}
   var row=await env.DB.prepare("SELECT * FROM catalog_expansion_runs WHERE version=? LIMIT 1").bind(CATALOG_EXPANSION_VERSION).first();
   if(!row){
     var now=new Date().toISOString();
-    await env.DB.prepare("INSERT INTO catalog_expansion_runs(version,next_index,added,updated,skipped,errors,last_error,updated_at,completed_at) VALUES(?,0,0,0,0,0,NULL,?,NULL)").bind(CATALOG_EXPANSION_VERSION,now).run();
+    await env.DB.prepare("INSERT INTO catalog_expansion_runs(version,next_index,added,updated,skipped,errors,last_error,updated_at,completed_at,brands_added,brands_reactivated) VALUES(?,0,0,0,0,0,NULL,?,NULL,0,0)").bind(CATALOG_EXPANSION_VERSION,now).run();
     row=await env.DB.prepare("SELECT * FROM catalog_expansion_runs WHERE version=? LIMIT 1").bind(CATALOG_EXPANSION_VERSION).first();
   }
   return row;
@@ -194,23 +247,27 @@ export async function catalogExpansionStatus(env){
     var b=await env.DB.prepare("SELECT COUNT(DISTINCT p.id) n FROM products p JOIN product_offers po ON po.product_id=p.id WHERE p.is_product_page_live=1 AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL").first();
     counts={liveProducts:Number(a&&a.n||0),monetizableProducts:Number(b&&b.n||0)};
   }catch(_){}
-  return {version:CATALOG_EXPANSION_VERSION,totalTargets:TARGETS.length,nextIndex:Number(run.next_index||0),complete:!!run.completed_at,added:Number(run.added||0),updated:Number(run.updated||0),skipped:Number(run.skipped||0),errors:Number(run.errors||0),lastError:run.last_error||null,updatedAt:run.updated_at,completedAt:run.completed_at||null,catalog:counts};
+  return {version:CATALOG_EXPANSION_VERSION,totalTargets:TARGETS.length,nextIndex:Number(run.next_index||0),complete:!!run.completed_at,brandsAdded:Number(run.brands_added||0),brandsReactivated:Number(run.brands_reactivated||0),added:Number(run.added||0),updated:Number(run.updated||0),skipped:Number(run.skipped||0),errors:Number(run.errors||0),lastError:run.last_error||null,updatedAt:run.updated_at,completedAt:run.completed_at||null,catalog:counts};
 }
 
 export async function catalogExpansionTick(env,batchSize){
   var run=await ensureState(env),start=Number(run.next_index||0);
   if(run.completed_at||start>=TARGETS.length)return catalogExpansionStatus(env);
   var brands=await knownBrands(env);
-  var info={products:await tableInfo(env,"products"),offers:await tableInfo(env,"product_offers")};
-  if(!info.products.length||!info.offers.length)throw new Error("Catalog schema unavailable");
+  var info={brands:await tableInfo(env,"brands"),products:await tableInfo(env,"products"),offers:await tableInfo(env,"product_offers")};
+  if(!info.brands.length||!info.products.length||!info.offers.length)throw new Error("Catalog schema unavailable");
   var end=Math.min(TARGETS.length,start+Math.max(1,Math.min(Number(batchSize||4),8)));
-  var added=0,updated=0,skipped=0,errors=0,lastError=null;
+  var brandsAdded=0,brandsReactivated=0,added=0,updated=0,skipped=0,errors=0,lastError=null;
   for(var i=start;i<end;i++){
     var target=TARGETS[i];
     try{
       var products=await searchChannel3(env,target[0]);
       for(var j=0;j<products.length;j++){
         try{
+          var approval=await ensureApprovedBrand(env,products[j],brands,info.brands);
+          if(approval.kind==="added")brandsAdded++;
+          else if(approval.kind==="reactivated")brandsReactivated++;
+          if(!approval.brand){skipped++;continue}
           var result=await upsertOne(env,products[j],target,brands,info);
           if(result==="added")added++;else if(result==="updated")updated++;else skipped++;
         }catch(e){errors++;lastError=String(e&&e.message||e).slice(0,500)}
@@ -218,7 +275,7 @@ export async function catalogExpansionTick(env,batchSize){
     }catch(e){errors++;lastError=String(e&&e.message||e).slice(0,500)}
   }
   var next=end,now=new Date().toISOString(),done=next>=TARGETS.length?now:null;
-  await env.DB.prepare("UPDATE catalog_expansion_runs SET next_index=?,added=added+?,updated=updated+?,skipped=skipped+?,errors=errors+?,last_error=?,updated_at=?,completed_at=COALESCE(completed_at,?) WHERE version=?")
-    .bind(next,added,updated,skipped,errors,lastError,now,done,CATALOG_EXPANSION_VERSION).run();
+  await env.DB.prepare("UPDATE catalog_expansion_runs SET next_index=?,brands_added=brands_added+?,brands_reactivated=brands_reactivated+?,added=added+?,updated=updated+?,skipped=skipped+?,errors=errors+?,last_error=?,updated_at=?,completed_at=COALESCE(completed_at,?) WHERE version=?")
+    .bind(next,brandsAdded,brandsReactivated,added,updated,skipped,errors,lastError,now,done,CATALOG_EXPANSION_VERSION).run();
   return catalogExpansionStatus(env);
 }
