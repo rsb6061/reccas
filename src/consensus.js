@@ -268,6 +268,25 @@ export async function syncMentionsOncePerDay(env) {
     await syncMentions(env);
   } catch (_) { lastMentionSyncDay = ""; }
 }
+export async function mentionsFeed(env) {
+  const corpus = await getCorpus(env), mentions = [];
+  corpus.productList.forEach(function (prod) {
+    prod.evidence.forEach(function (ev) { mentions.push({key: mentionKey(prod.key, ev), productKey: prod.key, brand: prod.brand, name: prod.name, guideSlug: ev.guideSlug || null, source: ev.source, independent: ev.independent, label: ev.label, url: ev.url}); });
+  });
+  return Response.json({generated: new Date().toISOString(), stats: corpus.stats, mentions: mentions}, {headers: {"Cache-Control": "public, max-age=300"}});
+}
+async function mentionChecks(env, column, value) {
+  const out = new Map();
+  try {
+    const rows = (await env.DB.prepare("SELECT mention_key,status,checked_on,verified_on FROM mention_checks WHERE " + column + "=?").bind(value).all()).results || [];
+    rows.forEach(function (r) { out.set(r.mention_key, r); });
+  } catch (_) {}
+  return out;
+}
+function niceDate(iso) {
+  const d = new Date(String(iso) + "T00:00:00Z");
+  return isNaN(d) ? String(iso || "") : d.toLocaleDateString("en-US", {month: "short", day: "numeric", year: "numeric", timeZone: "UTC"});
+}
 async function productObservations(env, productKey) {
   const out = {mentions: new Map(), prices: []};
   try {
@@ -481,16 +500,16 @@ export function createPages(h) {
     if (!prod) return null;
     let pick = prod.pick;
     if (pick._static) { try { pick = await h.enrichStaticPick(env, pick); } catch (_) {} }
-    const obs = await productObservations(env, key);
+    const obs = await productObservations(env, key), checks = await mentionChecks(env, "product_key", key);
     const n = prod.independent.length, price = parsePrice(pick.price), priceText = pick.price == null || pick.price === "" ? "" : (typeof pick.price === "number" ? money(pick.price) : String(pick.price));
     const dest = pick.shopUrl || pick.canonicalUrl || null, tracked = dest ? "/_api/out?edit=" + encodeURIComponent(prod.guideSlug) + "&to=" + encodeURIComponent(dest) : null;
     const shopAt = String(pick.shopLabel || pick.brand || "retailer").trim(), rel = pick._affiliate ? "sponsored noreferrer" : "noreferrer";
     const img = imageUrl(prod.image);
     function evidenceRows(list) {
       return list.map(function (ev) {
-        const o = obs.mentions.get(mentionKey(key, ev)), since = o ? o.first_seen : null;
+        const c = checks.get(mentionKey(key, ev)), verified = c && c.verified_on ? niceDate(c.verified_on) : "";
         const who = ev.independent ? "<a class='plainLink' href='/sources/" + esc(ev.sourceSlug) + "'>" + esc(ev.source) + "</a>" : esc(ev.source);
-        return "<tr><td>" + who + (ev.author ? "<div class='rankMeta'>" + esc(ev.author) + "</div>" : "") + "</td><td>" + esc(ev.label) + "</td><td>" + esc(ev.date || since || "") + "</td><td>" + (ev.url ? "<a class='plainLink' href='" + esc(ev.url) + "' target='_blank' rel='noreferrer'>Original ↗</a>" : "") + "</td></tr>";
+        return "<tr><td>" + who + (ev.author ? "<div class='rankMeta'>" + esc(ev.author) + "</div>" : "") + "</td><td>" + esc(ev.label) + "</td><td>" + esc(verified) + "</td><td>" + (ev.url ? "<a class='plainLink' href='" + esc(ev.url) + "' target='_blank' rel='noreferrer'>Original ↗</a>" : "") + "</td></tr>";
       }).join("");
     }
     const indep = prod.evidence.filter(function (ev) { return ev.independent; }), refs = prod.evidence.filter(function (ev) { return !ev.independent; });
@@ -500,8 +519,8 @@ export function createPages(h) {
     const alertBlock = "<div class='signup' style='margin-top:22px;padding:20px'><strong>Get an email if this goes on sale</strong><form class='js-alert' style='margin-top:10px'><input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'><input class='field' type='email' name='email' required autocomplete='email' placeholder='Email address' aria-label='Email address'><button class='btn alt' type='submit'>Watch price</button></form><div class='signupMsg js-alert-msg' role='status'>No account needed.</div></div><script>(function(){var f=document.querySelector('.js-alert'),m=document.querySelector('.js-alert-msg'),w=" + JSON.stringify(watch).replace(/</g, "\\u003c") + ";if(!f)return;f.addEventListener('submit',async function(e){e.preventDefault();var o=Object.fromEntries(new FormData(f).entries());m.textContent='Saving…';try{var r=await fetch('/_api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:o.email,website:o.website,kind:'price_alert',page:location.pathname,watch:w})}),j={};try{j=await r.json()}catch(_){}if(!r.ok){m.textContent=j.error||'Could not save that. Please try again.';return}f.reset();m.textContent='Saved. You are on the sale-alert list for this product.'}catch(_){m.textContent='Could not save that. Please try again.'}})})();</script>";
     const consensusLine = n >= 1 ? "Recommended by " + plural(n, "independent source") + (prod.appearances.length > 1 ? " across " + prod.appearances.length + " categories" : "") : "No independent recommendations recorded yet";
     const body = "<main class='wrap'><section class='hero'><div class='productHero'><img src='" + esc(img) + "' alt='" + esc(prod.brand + " " + prod.name) + "'><div><span class='eyebrow'>" + esc(prod.brand) + "</span><h1 style='font-size:clamp(34px,5vw,54px)'>" + esc(prod.name) + "</h1><p><strong>" + esc(consensusLine) + ".</strong> " + esc([prod.summary, prod.fitNote].filter(Boolean).join(" ")) + "</p><div class='guideRoundups' style='margin-top:14px'>" + appearances + "</div><div class='editActions' style='margin-top:22px'>" + (tracked ? "<a class='btn' href='" + tracked + "' target='_blank' rel='" + rel + "'>Shop at " + esc(shopAt) + (priceText ? " · " + esc(priceText) : "") + "</a>" : "") + "</div>" + alertBlock + "</div></div></section>"
-      + "<section class='section'><h2>Who recommends it</h2><p class='muted'>" + (n ? plural(n, "independent source") + ". Each row links to the original recommendation." : "Reccas has not recorded an independent recommendation for this product.") + " The date is when the source dated it, or when Reccas first recorded it (tracking began " + TRACKING_STARTED + ").</p>" + (indep.length ? "<div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Source</th><th>How they described it</th><th>Recorded</th><th>Receipt</th></tr></thead><tbody>" + evidenceRows(indep) + "</tbody></table></div>" : "") + "</section>"
-      + (refs.length ? "<section class='section'><h2>Brand and retailer references</h2><p class='muted'>Used to confirm product details. These are not counted as recommendations.</p><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Page</th><th>What it confirms</th><th>Recorded</th><th>Link</th></tr></thead><tbody>" + evidenceRows(refs) + "</tbody></table></div></section>" : "")
+      + "<section class='section'><h2>Who recommends it</h2><p class='muted'>" + (n ? plural(n, "independent source") + ". Each row links to the original recommendation." : "Reccas has not recorded an independent recommendation for this product.") + " “Last verified” is the most recent date Reccas re-read the source and found the product still recommended there.</p>" + (indep.length ? "<div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Source</th><th>How they described it</th><th>Last verified</th><th>Receipt</th></tr></thead><tbody>" + evidenceRows(indep) + "</tbody></table></div>" : "") + "</section>"
+      + (refs.length ? "<section class='section'><h2>Brand and retailer references</h2><p class='muted'>Used to confirm product details. These are not counted as recommendations.</p><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Page</th><th>What it confirms</th><th>Last verified</th><th>Link</th></tr></thead><tbody>" + evidenceRows(refs) + "</tbody></table></div></section>" : "")
       + priceHistory
       + "<section class='editMethod'><span class='eyebrow'>How this is counted</span><h2>One source, one count.</h2><p>A source is counted once for this product however many of its articles mention it. Reccas may earn a commission from some shopping links, which has no effect on the count. <a class='plainLink' href='/methodology'>Methodology</a>.</p></section></main>";
     const productSchema = {"@type": "Product", name: prod.brand + " " + prod.name, brand: {"@type": "Brand", name: prod.brand}, image: ["https://reccas.com" + img], description: prod.summary || (prod.brand + " " + prod.name)};
@@ -518,7 +537,7 @@ export function createPages(h) {
       + "<h2>How products are ranked</h2><p>Each product’s count is the number of different independent sources that recommend it. A source is counted once per product, even if several of its articles mention it. Within a category, products are ordered by that count; when two products tie, the order is editorial. Commission rates and affiliate availability play no part in the order.</p>"
       + "<h2>How a category gets a winner</h2><p>A category has a Best of Fashion " + FRANCHISE_YEAR + " winner only when its leading product is recommended by at least " + AWARD_MIN_SOURCES + " independent sources. Right now " + a.won.length + " of " + s.guides + " categories meet that bar. The other " + a.pending.length + " are listed as not yet awarded on the <a href='" + FRANCHISE_PATH + "'>Best of Fashion page</a>.</p>"
       + "<h2>Shopping checks and money</h2><p>Reccas checks that each product is still sold and shows a current price where one is available. Some shopping links are affiliate links and Reccas may earn a commission. Where no affiliate link exists, the link goes straight to the product. Nobody can pay to be included or ranked.</p>"
-      + "<h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging when it first saw each recommendation on " + TRACKING_STARTED + ". Recommendations recorded before then have no reliable date, so trends over time are not reported yet.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
+      + "<h2>How recommendations are kept fresh</h2><p>Every week Reccas re-reads each source article and checks that it still names the product. Each guide shows the date its sources were last verified and how many were confirmed; each product page shows the date per source. Prices are checked daily where a live price is available. A recommendation that can no longer be found is reviewed by a person before anything changes.</p><h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging recommendations on " + TRACKING_STARTED + ", so trends over time are not reported yet.</li><li>Some publishers block automated readers. A source Reccas could not re-read keeps its earlier verified date, or shows none.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
       + "<h2>Corrections</h2><p>If a recommendation is misattributed, a link is broken or a product is matched wrongly, email <a href='mailto:hello@reccas.com'>hello@reccas.com</a> and it will be fixed.</p></section></main>";
     return page("/methodology", "Methodology: How Best of Fashion Is Counted", body, "How Reccas counts fashion recommendations: what qualifies as an independent source, why brand pages are excluded, how products are ranked and where the data is thin.", 200, null, {kind: "article", headline: "How Best of Fashion is counted", breadcrumb: "Methodology", modified: today()});
   }
@@ -528,7 +547,9 @@ export function createPages(h) {
     if (!guide) return null;
     const picks = [];
     for (const p of guide.picks) picks.push(p._static ? await h.enrichStaticPick(env, p) : p);
-    const total = guide.independentSources.length;
+    const total = guide.independentSources.length, checks = await mentionChecks(env, "guide_slug", slug);
+    let lastVerified = "", confirmed = 0, checkable = 0;
+    guide.picks.forEach(function (p) { p.evidence.forEach(function (ev) { if (!ev.independent) return; checkable++; const c = checks.get(mentionKey(p.key, ev)); if (c && c.verified_on) { confirmed++; if (c.verified_on > lastVerified) lastVerified = c.verified_on; } }); });
     const cards = picks.map(function (x) {
       const evidence = x.evidence || [], dest = x.shopUrl || x.canonicalUrl || (evidence[0] && evidence[0].url) || null, track = dest ? "/_api/out?edit=" + encodeURIComponent(slug) + "&to=" + encodeURIComponent(dest) : "#";
       const ev = evidence.map(function (z) { return "<a class='editSource" + (z.independent ? "" : " isReference") + "' href='" + esc(z.url) + "' target='_blank' rel='noreferrer'><strong>" + esc(z.source) + "</strong> · " + esc(z.independent ? z.label : "Brand or retailer page") + " ↗</a>"; }).join("");
@@ -547,7 +568,7 @@ export function createPages(h) {
       return "<article class='editPick' id='pick-" + esc(x.rank) + "'><div class='editVisual'><span class='editRank'>#" + esc(x.rank) + "</span>" + visual + "</div><div class='editCopy'>" + watchButton + "<div class='editTop'><div><p class='editBrand'>" + esc(x.brand) + "</p><h2><a href='/products/" + esc(x.key) + "'>" + esc(x.name) + "</a></h2></div></div>" + consensus + "<p class='editSummary'>" + esc(description || "") + "</p><div class='editSources'>" + ev + "</div><div class='editActions'>" + (dest ? "<a class='btn' href='" + track + "' target='_blank' rel='" + rel + "'>" + action + "</a>" : "") + "<a class='plainLink' style='font-size:13px' href='/products/" + esc(x.key) + "'>All recommendations for this product</a>" + commerceNote + "</div></div></article>";
     }).join("");
     const lead = picks[0], awarded = lead && lead.independent.length >= AWARD_MIN_SOURCES;
-    const metrics = "<div class='editMetrics'><span><strong>" + esc(picks.length) + "</strong> ranked picks</span><span><strong>" + esc(total) + "</strong> independent sources</span><span><strong>" + esc(guide.checkedLabel) + "</strong> last checked</span></div>";
+    const metrics = "<div class='editMetrics'><span><strong>" + esc(picks.length) + "</strong> ranked picks</span><span><strong>" + esc(total) + "</strong> independent sources</span>" + (lastVerified ? "<span><strong>" + esc(niceDate(lastVerified)) + "</strong> sources last verified · " + confirmed + " of " + checkable + " confirmed</span>" : "<span><strong>" + esc(guide.checkedLabel) + "</strong> last checked</span>") + "</div>";
     const intro = "<section class='editIntro'><div><span class='eyebrow'>" + (awarded ? "Best of Fashion " + FRANCHISE_YEAR + " winner" : "Not yet awarded") + "</span><h2>" + (awarded ? esc(lead.brand + " " + lead.name) : "Still gathering evidence.") + "</h2></div><p>" + (awarded ? esc(lead.brand + " " + lead.name) + " leads this category with " + lead.independent.length + " independent sources. " : "No product here has reached the " + AWARD_MIN_SOURCES + " independent sources needed to win the category. ") + "Picks are ranked by how many independent sources recommend them. Brand and retailer pages are shown with a dashed outline and are not counted. <a class='plainLink' href='/methodology'>How we count</a>.</p></section>";
     const method = "<section class='editMethod'><span class='eyebrow'>How Reccas built this guide</span><h2>What counts as a recommendation?</h2><p>" + esc(guide.freshnessCopy || "The product must still satisfy the stated category, price, or use-case constraint when Reccas checks it.") + " Reccas may earn a commission from some shopping links; that does not affect the ranking.</p></section>";
     const socialImage = lead ? "https://reccas.com" + imageUrl({slug: slug, rank: lead.rank}) : null;
