@@ -20,7 +20,7 @@ function tokens(name) {
 export function mentions(pageText, brand, name) {
   const text = norm(pageText), b = norm(brand), want = tokens(name);
   if (!text || !want.length) return false;
-  if (b && text.indexOf(b) < 0 && text.indexOf(b.replace(/ /g, "")) < 0) return false;
+  if (b && text.indexOf(b) < 0 && text.replace(/ /g, "").indexOf(b.replace(/ /g, "")) < 0) return false;
   const need = Math.max(1, Math.ceil(want.length * 0.7));
   for (const anchor of want.concat(want.map((t) => t.slice(0, 5)))) {
     let at = text.indexOf(anchor);
