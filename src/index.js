@@ -480,8 +480,9 @@ async function channel3StaticPick(env,pick){
       if(score>bestScore){best=pr;bestScore=score}
     }
     if(!best)return null;
-    var offer=channel3BestOffer(best,pick),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
-    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:true,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0});
+    var offer=pick.skipChannel3Offer?null:channel3BestOffer(best,pick),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
+    var exactImg=pick.preferStaticImage&&pick.imageUrl?pick.imageUrl:null;
+    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:exactImg||img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:!pick.skipChannel3Offer,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0});
     return out;
   }catch(_){return null}
 }
