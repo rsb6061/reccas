@@ -266,6 +266,7 @@ export const STATIC_EDITS={
         "requiredTitleTerms": ["clean", "cut", "t-shirt"],
         "excludeTitleTerms": ["dress", "long-sleeve", "long sleeve", "tank"],
         "canonicalUrl": "https://www.cos.com/en-us/women/womenswear/tshirts/regular/product/the-clean-cut-t-shirt-white-0960679001",
+        "fallbackPrice": 45,
         "summary": "The clearest consensus pick: multiple editorial teams praise the substantial, opaque fabric and slightly boxy shape.",
         "fitNote": "The structured mid-weight cotton is the appeal; choose something lighter if you want a drapey or tissue-thin tee.",
         "evidence": [
@@ -284,6 +285,8 @@ export const STATIC_EDITS={
         "requiredTitleTerms": ["crew", "neck", "t-shirt"],
         "excludeTitleTerms": ["dress", "kids", "men", "long-sleeve", "long sleeve"],
         "canonicalUrl": "https://www.uniqlo.com/us/en/products/E424873-000/00?colorDisplayCode=00",
+        "fallbackPrice": 19.9,
+        "imageUrl": "https://image.uniqlo.com/UQ/ST3/us/imagesgoods/424873/item/usgoods_00_424873.jpg",
         "summary": "The value consensus pick: a sturdy mid-weight crewneck editors repurchase because it works alone or under layers.",
         "fitNote": "The fabric is heavier and straighter than many fashion tees; that makes it opaque but less drapey.",
         "evidence": [
@@ -303,6 +306,7 @@ export const STATIC_EDITS={
         "requiredAnyTerms": ["tee", "t-shirt", "t shirt", "the margo"],
         "excludeTitleTerms": ["dress", "bebe", "pant", "skirt", "long-sleeve", "long sleeve"],
         "canonicalUrl": "https://leset.com/products/the-margo-white",
+        "fallbackPrice": 78,
         "summary": "The polished premium tee for shoppers who want a softer, shape-holding cotton basic rather than the structured high-street options.",
         "fitNote": "LESET describes it as true to size with a relaxed-but-fitted balance; size up if you want a more effortless, looser fit.",
         "evidence": [
