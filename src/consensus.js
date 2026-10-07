@@ -289,15 +289,15 @@ function buildCorpus(edits, overlay, extras) {
   const sourceList = Array.from(sources.values()).sort(function (a, b) { return b.productKeys.length - a.productKeys.length || a.name.localeCompare(b.name); });
   let mentions = 0;
   productList.forEach(function (p) { p.evidence.forEach(function (ev) { if (counts(ev)) mentions++; }); });
-  const counts = {clothing: 0, shoes: 0, bags: 0, accessories: 0};
-  guideList.forEach(function (g) { counts[g.category]++; });
+  const perCategory = {clothing: 0, shoes: 0, bags: 0, accessories: 0};
+  guideList.forEach(function (g) { perCategory[g.category]++; });
   const types = TYPE_MENU_ORDER.map(function (key) {
     const def = TYPES.find(function (t) { return t.key === key; });
     return {key: key, label: def.label, guides: guideList.filter(function (g) { return g.type === key; })};
   }).filter(function (t) { return t.guides.length; });
   const untyped = guideList.filter(function (g) { return !g.type; });
   if (untyped.length) types.push({key: "more", label: "More", guides: untyped});
-  return {guides: guides, products: products, sources: sources, guideList: guideList, productList: productList, sourceList: sourceList, stats: {guides: guideList.length, products: productList.length, sources: sourceList.length, mentions: mentions}, categoryCounts: counts, types: types};
+  return {guides: guides, products: products, sources: sources, guideList: guideList, productList: productList, sourceList: sourceList, stats: {guides: guideList.length, products: productList.length, sources: sourceList.length, mentions: mentions}, categoryCounts: perCategory, types: types};
 }
 
 let corpusCache = {at: 0, corpus: null};
