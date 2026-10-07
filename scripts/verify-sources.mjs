@@ -32,7 +32,7 @@ export function mentions(pageText, brand, name) {
   }
   return false;
 }
-function visibleText(html) {
+export function visibleText(html) {
   return String(html).replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
 }
 function day(v) { const m = String(v || "").match(/\d{4}-\d{2}-\d{2}/); return m ? m[0] : null; }
@@ -63,14 +63,14 @@ export function articleMeta(html) {
   if (out.modifiedAt && out.publishedAt && out.modifiedAt < out.publishedAt) out.modifiedAt = null;
   return out;
 }
-async function fetchPage(url) {
+export async function fetchPage(url) {
   try {
     const r = await fetch(url, {redirect: "follow", signal: AbortSignal.timeout(20000), headers: {"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", accept: "text/html,application/xhtml+xml", "accept-language": "en-US,en;q=0.9"}});
     if (!r.ok) return {status: "blocked", detail: "HTTP " + r.status};
     const html = await r.text(), text = visibleText(html);
     // JSON-LD and inline data often carry the product list on script-rendered pages.
     if (text.length < 1500 && html.length < 20000) return {status: "blocked", detail: "empty page"};
-    return {status: "ok", text: text + " " + html, meta: articleMeta(html)};
+    return {status: "ok", text: text + " " + html, html: html, meta: articleMeta(html)};
   } catch (e) {
     return {status: "blocked", detail: String(e && e.name || e).slice(0, 60)};
   }

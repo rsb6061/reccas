@@ -181,6 +181,18 @@ function applyOverlay(productKey, evidence, overlay) {
     return true;
   });
 }
+// Recommendations read out of already-cited articles and accepted by rule (see scripts/extract-recommendations.mjs).
+async function loadExtras(env) {
+  const out = new Map();
+  try {
+    const rows = (await env.DB.prepare("SELECT matched_product_key,source,label,url,author,published_at,modified_at FROM mention_candidates WHERE status='accepted' AND matched_product_key IS NOT NULL").all()).results || [];
+    rows.forEach(function (r) {
+      if (!out.has(r.matched_product_key)) out.set(r.matched_product_key, []);
+      out.get(r.matched_product_key).push({source: r.source, label: r.label || "Recommended in this article", url: r.url, author: r.author || null, date: r.modified_at || r.published_at || null});
+    });
+  } catch (_) {}
+  return out;
+}
 async function loadOverlay(env) {
   const out = new Map();
   try {
@@ -190,7 +202,7 @@ async function loadOverlay(env) {
   return out;
 }
 
-function buildCorpus(edits, overlay) {
+function buildCorpus(edits, overlay, extras) {
   const guides = new Map(), products = new Map(), sources = new Map();
   const members = new Map();
   edits.forEach(function (_, slug) {
@@ -209,7 +221,8 @@ function buildCorpus(edits, overlay) {
       (member.edit.picks || []).forEach(function (raw) {
         const key = slugify(String(raw.brand || "") + " " + String(raw.name || ""));
         if (!key) return;
-        const evidence = applyOverlay(key, normalizeEvidence(raw), overlay);
+        const extracted = extras && !byKey.has(key) ? extras.get(key) || [] : [];
+        const evidence = applyOverlay(key, normalizeEvidence(Object.assign({}, raw, {evidence: (raw.evidence || []).concat(extracted)})), overlay);
         if (!byKey.has(key)) {
           byKey.set(key, Object.assign({}, raw, {key: key, evidence: evidence, _static: member.isStatic, _order: order++}));
         } else {
@@ -282,7 +295,7 @@ let navTypeItems = TYPE_MENU_ORDER.map(function (key) { return {label: TYPES.fin
 export async function getCorpus(env) {
   const now = Date.now();
   if (corpusCache.corpus && now - corpusCache.at < CORPUS_TTL_MS) return corpusCache.corpus;
-  const corpus = buildCorpus(await loadEdits(env), await loadOverlay(env));
+  const corpus = buildCorpus(await loadEdits(env), await loadOverlay(env), await loadExtras(env));
   corpusCache = {at: now, corpus: corpus};
   navTypeItems = corpus.types.filter(function (t) { return t.key !== "more"; }).map(function (t) { return {label: t.label, href: t.guides.length === 1 ? "/" + t.guides[0].slug : "/recommendations#" + t.key}; });
   return corpus;
@@ -332,7 +345,7 @@ function mentionKey(productKey, ev) { return productKey + "|" + ev.sourceSlug + 
 
 export async function syncMentions(env) {
   await ensureObservationTables(env);
-  const corpus = buildCorpus(await loadEdits(env), await loadOverlay(env)), today = new Date().toISOString().slice(0, 10);
+  const corpus = buildCorpus(await loadEdits(env), await loadOverlay(env), await loadExtras(env)), today = new Date().toISOString().slice(0, 10);
   const stmts = [];
   corpus.productList.forEach(function (prod) {
     prod.evidence.forEach(function (ev) {
@@ -386,13 +399,66 @@ export async function mentionsFeed(env) {
   corpus.productList.forEach(function (prod) {
     prod.evidence.forEach(function (ev) { mentions.push({key: mentionKey(prod.key, ev), productKey: prod.key, brand: prod.brand, name: prod.name, guideSlug: ev.guideSlug || null, source: ev.source, independent: ev.independent, label: ev.label, url: ev.url}); });
   });
-  return Response.json({generated: new Date().toISOString(), stats: corpus.stats, mentions: mentions}, {headers: {"Cache-Control": "public, max-age=300"}});
+  const products = corpus.productList.map(function (p) { return {key: p.key, brand: p.brand, name: p.name}; });
+  return Response.json({generated: new Date().toISOString(), stats: corpus.stats, products: products, mentions: mentions}, {headers: {"Cache-Control": "public, max-age=60"}});
 }
-export async function saveMentionChecks(request, env) {
+function verifyKeyOk(request, env) {
   const expected = String(env.VERIFY_KEY || ""), given = String(request.headers.get("x-verify-key") || "");
   let diff = expected.length ^ given.length;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i % (given.length || 1));
-  if (expected.length < 32 || diff !== 0) return Response.json({error: "Not authorized"}, {status: 401});
+  return expected.length >= 32 && diff === 0;
+}
+async function ensureCandidates(env) {
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS mention_candidates (id INTEGER PRIMARY KEY AUTOINCREMENT,url TEXT NOT NULL,source TEXT NOT NULL,source_slug TEXT NOT NULL,brand TEXT NOT NULL,name TEXT NOT NULL,product_key TEXT NOT NULL,matched_product_key TEXT,label TEXT,basis TEXT,author TEXT,published_at TEXT,modified_at TEXT,validated INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,model TEXT,extracted_on TEXT NOT NULL,UNIQUE(url,product_key))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mention_candidates_status ON mention_candidates(status,matched_product_key)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS extraction_runs (url TEXT PRIMARY KEY,extracted_on TEXT NOT NULL,products INTEGER,model TEXT,missing TEXT)")
+  ]);
+}
+const EXTRACT_PROMPT = "You read a women's fashion article and list the specific products it recommends. Return JSON: {\"products\":[{\"brand\":\"\",\"name\":\"\",\"label\":\"\",\"basis\":\"\"}]}. Rules: include only products the article itself recommends to readers, each with a brand and a specific product or model name exactly as the article writes it. Leave out brands named without a product, products mentioned only for comparison or criticism, and anything from ads, navigation or related-article links. label is the article's own short descriptor for the product, such as 'Best overall', or an empty string. basis is one of tested, owned, editor_pick, listed. Never invent a product. At most 40 products.";
+export async function extractProducts(request, env) {
+  if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
+  if (!env.OPENAI_API_KEY) return Response.json({error: "OPENAI_API_KEY missing"}, {status: 503});
+  let b = {};
+  try { b = await request.json(); } catch (_) {}
+  const text = String(b.text || "").slice(0, 60000);
+  if (text.length < 500) return Response.json({error: "Text too short"}, {status: 400});
+  let lastError = "no model answered";
+  for (const model of ["gpt-4o-mini", "gpt-5-mini"]) {
+    try {
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {method: "POST", headers: {"content-type": "application/json", Authorization: "Bearer " + env.OPENAI_API_KEY}, body: JSON.stringify({model: model, response_format: {type: "json_object"}, messages: [{role: "system", content: EXTRACT_PROMPT}, {role: "user", content: "Article from " + String(b.source || "").slice(0, 80) + " (" + String(b.url || "").slice(0, 300) + "):\n\n" + text}]})});
+      if (!r.ok) { lastError = model + " HTTP " + r.status; continue; }
+      const d = await r.json(), parsed = JSON.parse(d.choices[0].message.content);
+      const products = (Array.isArray(parsed.products) ? parsed.products : []).slice(0, 40).map(function (p) { return {brand: String(p.brand || "").trim().slice(0, 80), name: String(p.name || "").trim().slice(0, 160), label: String(p.label || "").trim().slice(0, 120), basis: ["tested", "owned", "editor_pick", "listed"].indexOf(p.basis) >= 0 ? p.basis : "listed"}; }).filter(function (p) { return p.brand && p.name; });
+      return Response.json({ok: true, model: model, products: products, usage: d.usage || null});
+    } catch (e) { lastError = model + " " + String(e && e.message || e).slice(0, 120); }
+  }
+  return Response.json({error: lastError}, {status: 502});
+}
+export async function saveCandidates(request, env) {
+  if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
+  let b = {};
+  try { b = await request.json(); } catch (_) {}
+  const day = String(b.day || ""), url = String(b.url || "").slice(0, 1000), rows = Array.isArray(b.rows) ? b.rows.slice(0, 60) : [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !url) return Response.json({error: "Bad request"}, {status: 400});
+  await ensureCandidates(env);
+  const ok = ["accepted", "new_product", "unvalidated"], d = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? v : null; };
+  const stmts = rows.filter(function (r) { return r && r.brand && r.name && r.productKey && ok.indexOf(r.status) >= 0; }).map(function (r) {
+    return env.DB.prepare("INSERT INTO mention_candidates (url,source,source_slug,brand,name,product_key,matched_product_key,label,basis,author,published_at,modified_at,validated,status,model,extracted_on) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(url,product_key) DO UPDATE SET matched_product_key=excluded.matched_product_key,label=excluded.label,basis=excluded.basis,author=excluded.author,published_at=excluded.published_at,modified_at=excluded.modified_at,validated=excluded.validated,status=excluded.status,model=excluded.model,extracted_on=excluded.extracted_on").bind(url, String(b.source || "").slice(0, 120), slugify(b.source), String(r.brand).slice(0, 80), String(r.name).slice(0, 160), String(r.productKey).slice(0, 300), r.matchedProductKey ? String(r.matchedProductKey).slice(0, 300) : null, String(r.label || "").slice(0, 120) || null, r.basis || null, b.author ? String(b.author).slice(0, 160) : null, d(b.publishedAt), d(b.modifiedAt), r.validated ? 1 : 0, r.status, String(b.model || "").slice(0, 40) || null, day);
+  });
+  stmts.push(env.DB.prepare("INSERT INTO extraction_runs (url,extracted_on,products,model,missing) VALUES (?,?,?,?,?) ON CONFLICT(url) DO UPDATE SET extracted_on=excluded.extracted_on,products=excluded.products,model=excluded.model,missing=excluded.missing").bind(url, day, rows.length, String(b.model || "").slice(0, 40) || null, JSON.stringify((Array.isArray(b.missing) ? b.missing : []).slice(0, 40))));
+  for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
+  resetCorpusCache();
+  return Response.json({ok: true, saved: stmts.length - 1});
+}
+export async function extractionStatus(request, env) {
+  if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
+  await ensureCandidates(env);
+  const runs = (await env.DB.prepare("SELECT url,extracted_on FROM extraction_runs").all()).results || [];
+  return Response.json({runs: runs});
+}
+export async function saveMentionChecks(request, env) {
+  if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
   let b = {};
   try { b = await request.json(); } catch (_) {}
   const day = String(b.day || ""), rows = Array.isArray(b.rows) ? b.rows.slice(0, 500) : [];

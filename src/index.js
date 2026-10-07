@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks,signupPopup} from "./consensus.js";
+import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
 import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
 const STATIC_COLLECTIONS = {
@@ -937,6 +937,9 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(path==="/_api/subscribe"&&request.method==="POST")return subscribe(request,env,ctx,confirmSignup);
   if(path==="/_api/mentions.json"&&request.method==="GET")return mentionsFeed(env);
   if(path==="/_api/admin/mention-checks"&&request.method==="POST")return saveMentionChecks(request,env);
+  if(path==="/_api/admin/extract"&&request.method==="POST")return extractProducts(request,env);
+  if(path==="/_api/admin/candidates"&&request.method==="POST")return saveCandidates(request,env);
+  if(path==="/_api/admin/extraction-status"&&request.method==="GET")return extractionStatus(request,env);
   if(path==="/_api/admin/mention-status"&&request.method==="POST")return review.setStatus(request,env);
   if(path==="/admin/review")return review.reviewPage(request,env);
   if(path==="/unsubscribe"&&(request.method==="GET"||request.method==="POST"))return unsubscribePage(request,env);
