@@ -4,7 +4,7 @@ import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
 import {createPeople,savePersonPicks,peopleStatus,peopleForProduct,peopleSitemap} from "./people.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
-import {catalogExpansionTick,catalogExpansionStatus} from "./catalog-expansion.js";
+import {catalogExpansionTick,catalogExpansionStatus,refillCatalogIntent} from "./catalog-expansion.js";
 const STATIC_COLLECTIONS = {
   "/what-to-wear-by-temperature":["What to Wear by Temperature","Practical outfit ideas organized by temperature and weather."],
   "/capsule-wardrobes":["Capsule Wardrobes","Seasonal capsules built around complete, repeatable outfits."],
@@ -919,8 +919,8 @@ function coverageIntentFromGuide(g){
   if(query.indexOf("women")<0&&query.indexOf("womens")<0)query="women "+query;
   return{query:query,category:category,terms:terms};
 }
-async function recommendationCoverageAudit(env){
-  var guides=await guideIndex(env),rows=[];
+async function recommendationCoverageAudit(env,doRefill){
+  var guides=await guideIndex(env),rows=[],thin=[];
   for(var i=0;i<guides.length;i++){
     var g=guides[i],full=await getGuide(env,g.slug),intent=coverageIntentFromGuide(g),params=[intent.category],where="p.canonical_category=?";
     var token=(intent.terms||[]).filter(Boolean);
@@ -928,10 +928,17 @@ async function recommendationCoverageAudit(env){
     var st=env.DB.prepare("SELECT COUNT(DISTINCT p.id) n FROM products p JOIN product_offers po ON po.product_id=p.id WHERE p.is_product_page_live=1 AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL AND "+where);
     st=st.bind.apply(st,params);var rr=await st.first(),pool=Number(rr&&rr.n||0);
     var evidenceProducts=full&&Array.isArray(full.picks)?full.picks.length:0,strongProducts=full&&Array.isArray(full.picks)?full.picks.filter(function(p){return Array.isArray(p.independent)&&p.independent.length>=3}).length:0;
-    rows.push({slug:g.slug,title:g.title,categoryPoolProducts:pool,evidenceProducts:evidenceProducts,strongProducts:strongProducts,independentSources:full&&full.independentSources?full.independentSources.length:Number(g.sources||0),thinEvidence:evidenceProducts<5||strongProducts<3});
+    var row={slug:g.slug,title:g.title,categoryPoolProducts:pool,evidenceProducts:evidenceProducts,strongProducts:strongProducts,independentSources:full&&full.independentSources?full.independentSources.length:Number(g.sources||0),thinCatalog:pool<8,thinEvidence:evidenceProducts<5||strongProducts<3,intent:intent};
+    rows.push(row);if(row.thinCatalog)thin.push(row);
   }
-  rows.sort(function(a,b){return a.evidenceProducts-b.evidenceProducts||a.strongProducts-b.strongProducts||a.slug.localeCompare(b.slug)});
-  return{guideCount:rows.length,thinEvidenceCount:rows.filter(function(x){return x.thinEvidence}).length,strongGuideCount:rows.filter(function(x){return !x.thinEvidence}).length,rows:rows};
+  var refill=[];
+  if(doRefill){
+    for(var j=0;j<thin.length;j++){
+      var x=thin[j],r=await refillCatalogIntent(env,x.intent);refill.push(Object.assign({slug:x.slug,before:x.categoryPoolProducts},r));
+    }
+  }
+  rows.sort(function(a,b){return a.categoryPoolProducts-b.categoryPoolProducts||a.evidenceProducts-b.evidenceProducts||a.slug.localeCompare(b.slug)});
+  return{guideCount:rows.length,thinCatalogCount:rows.filter(function(x){return x.thinCatalog}).length,thinEvidenceCount:rows.filter(function(x){return x.thinEvidence}).length,strongGuideCount:rows.filter(function(x){return !x.thinEvidence}).length,rows:rows,refill:refill};
 }
 async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
 const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
@@ -940,7 +947,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
   if(path==="/health"){if(u.searchParams.get("expand")==="targeted-fashion-v2-brands-2026-10-07")return Response.json(await catalogExpansionTick(env,6),{headers:{"Cache-Control":"no-store"}});ctx.waitUntil(catalogExpansionTick(env,6).catch(function(){}));return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}})};
   if(path==="/_api/catalog-expansion/status"&&request.method==="GET")return Response.json(await catalogExpansionStatus(env),{headers:{"Cache-Control":"no-store"}});
-  if(path==="/_api/recommendation-coverage"&&request.method==="GET")return Response.json(await recommendationCoverageAudit(env),{headers:{"Cache-Control":"no-store"}});
+  if(path==="/_api/recommendation-coverage"&&request.method==="GET"){var refill=u.searchParams.get("refill")==="1";return Response.json(await recommendationCoverageAudit(env,refill),{headers:{"Cache-Control":"no-store"}});}
   if(path==="/robots.txt")return new Response("User-agent: *\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: OAI-SearchBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: GPTBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\n\nSitemap: https://reccas.com/sitemap.xml\n",{headers:{"content-type":"text/plain; charset=utf-8","cache-control":"public, max-age=3600"}});
   if(path==="/sitemap.xml"||path==="/_api/sitemap")return sitemap(env);
   var machine=machineResource(path);if(machine)return machine;
