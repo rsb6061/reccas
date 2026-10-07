@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,adminSyncPrices,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
+import {createPeople,savePersonPicks,peopleStatus,peopleForProduct,peopleSitemap} from "./people.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
 import {catalogExpansionTick,catalogExpansionStatus} from "./catalog-expansion.js";
 const STATIC_COLLECTIONS = {
@@ -224,7 +225,7 @@ function page(path,title,body,desc,status,robots,extra){
   var head="<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+esc(fullTitle)+"</title><meta name='description' content='"+esc(description)+"'><meta name='robots' content='"+esc(robotText)+"'><meta name='googlebot' content='"+esc(robotText)+"'><meta name='application-name' content='Reccas'><meta name='theme-color' content='#f7f0e6'><link rel='canonical' href='"+esc(url)+"'><link rel='manifest' href='/manifest.json?v=20261007'><link rel='icon' type='image/png' sizes='128x128' href='"+icon+"'><link rel='shortcut icon' href='"+icon+"'><link rel='apple-touch-icon' href='"+icon+"'><meta property='og:site_name' content='Reccas'><meta property='og:type' content='"+ogType+"'><meta property='og:title' content='"+esc(fullTitle)+"'><meta property='og:description' content='"+esc(description)+"'><meta property='og:url' content='"+esc(url)+"'>"+(image?"<meta property='og:image' content='"+esc(image)+"'>":"")+"<meta name='twitter:card' content='"+(image?"summary_large_image":"summary")+"'><meta name='twitter:title' content='"+esc(fullTitle)+"'><meta name='twitter:description' content='"+esc(description)+"'>"+(image?"<meta name='twitter:image' content='"+esc(image)+"'>":"")+"<script type='application/ld+json'>"+schema+"</script><script type='text/javascript'>(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,'clarity','script','yu1hc4t3ym');</script><style>"+css+CONSENSUS_CSS+"</style></head><body>";
   var nav=siteHeader();
   var crumb=path!=="/"&&String(robotText).indexOf("noindex")<0?"<div class='breadcrumbs'><a href='/'>Reccas</a><span>›</span><span>"+esc(extra.breadcrumb||title)+"</span></div>":"";
-  var foot=signupPopup(path)+"<footer class='footer'><div class='footer-inner'><div><div class='footer-brand'>Reccas</div><div>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s fashion, then shows the products the most independent sources agree on.</div></div><nav class='footer-links'><a href='/recommendations'>Best of Fashion</a><a href='/most-recommended'>Most recommended</a><a href='/brands'>Brands</a><a href='/sources'>Sources</a><a href='/methodology'>Methodology</a><a href='/about'>About</a><a href='/privacy'>Privacy</a><a href='/llms.txt'>llms.txt</a></nav></div><div class='footer-inner' style='padding-top:0'><p class='footNote'>Reccas is independent. The publications, editors, stylists and creators named on this site are not affiliated with Reccas and have not endorsed it. Their names appear only to attribute recommendations they published, each linked to its source. Reccas may earn a commission from some shopping links, which never affects counts or rankings.</p></div></footer></body></html>";
+  var foot=signupPopup(path)+"<footer class='footer'><div class='footer-inner'><div><div class='footer-brand'>Reccas</div><div>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s fashion, then shows the products the most independent sources agree on.</div></div><nav class='footer-links'><a href='/recommendations'>Best of Fashion</a><a href='/most-recommended'>Most recommended</a><a href='/brands'>Brands</a><a href='/people'>People</a><a href='/sources'>Sources</a><a href='/methodology'>Methodology</a><a href='/about'>About</a><a href='/privacy'>Privacy</a><a href='/llms.txt'>llms.txt</a></nav></div><div class='footer-inner' style='padding-top:0'><p class='footNote'>Reccas is independent. The publications, editors, stylists and creators named on this site are not affiliated with Reccas and have not endorsed it. Their names appear only to attribute recommendations they published, each linked to its source. Reccas may earn a commission from some shopping links, which never affects counts or rankings.</p></div></footer></body></html>";
   return new Response(head+nav+crumb+body+foot,{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":status===404?"no-store":"public, max-age=120","x-content-type-options":"nosniff","referrer-policy":"strict-origin-when-cross-origin"}});
 }
 async function one(db,sql){var args=[].slice.call(arguments,2),stmt=db.prepare(sql);if(args.length)stmt=stmt.bind.apply(stmt,args);return (await stmt.first())||null}
@@ -555,7 +556,7 @@ async function staticPage(path){
   return null;
 }
 async function sitemap(env){
-  var entries=await pages.sitemapEntries(env);
+  var entries=(await pages.sitemapEntries(env)).concat(await peopleSitemap(env));
   var xml="<?xml version='1.0' encoding='UTF-8'?><urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"+entries.map(function(e){return "<url><loc>https://reccas.com"+esc(e.p)+"</loc>"+(e.last?"<lastmod>"+esc(String(e.last).slice(0,10))+"</lastmod>":"")+"</url>"}).join("")+"</urlset>";
   return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"public,max-age=3600"}});
 }
@@ -891,8 +892,9 @@ function machineResource(path){
   return null;
 }
 function faviconResponse(){var raw=atob(FAVICON_B64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Response(bytes,{headers:{"content-type":"image/png","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}})}
-const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
+const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick,peopleFor:peopleForProduct,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
+const peoplePages=createPeople({page:page,esc:esc});
 
 function coverageIntentFromGuide(g){
   var t=String(g&&g.title||g&&g.slug||"").toLowerCase(),slug=String(g&&g.slug||"");
@@ -938,7 +940,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
   if(path==="/health"){if(u.searchParams.get("expand")==="targeted-fashion-v2-brands-2026-10-07")return Response.json(await catalogExpansionTick(env,6),{headers:{"Cache-Control":"no-store"}});ctx.waitUntil(catalogExpansionTick(env,6).catch(function(){}));return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}})};
   if(path==="/_api/catalog-expansion/status"&&request.method==="GET")return Response.json(await catalogExpansionStatus(env),{headers:{"Cache-Control":"no-store"}});
-  if(path==="/_api/recommendation-coverage"&&request.method==="GET")return Response.json(await recommendationCoverageAudit(env),{headers:{"Cache-Control":"no-store"}});}
+  if(path==="/_api/recommendation-coverage"&&request.method==="GET")return Response.json(await recommendationCoverageAudit(env),{headers:{"Cache-Control":"no-store"}});
   if(path==="/robots.txt")return new Response("User-agent: *\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: OAI-SearchBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: GPTBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\n\nSitemap: https://reccas.com/sitemap.xml\n",{headers:{"content-type":"text/plain; charset=utf-8","cache-control":"public, max-age=3600"}});
   if(path==="/sitemap.xml"||path==="/_api/sitemap")return sitemap(env);
   var machine=machineResource(path);if(machine)return machine;
@@ -984,6 +986,8 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/_api/admin/extract"&&request.method==="POST")return extractProducts(request,env);
   if(path==="/_api/admin/candidates"&&request.method==="POST")return saveCandidates(request,env);
   if(path==="/_api/admin/extraction-status"&&request.method==="GET")return extractionStatus(request,env);
+  if(path==="/_api/admin/person-picks"&&request.method==="POST")return savePersonPicks(request,env);
+  if(path==="/_api/admin/people-status"&&request.method==="GET")return peopleStatus(request,env);
   if(path==="/_api/admin/sync-prices"&&request.method==="POST")return adminSyncPrices(request,env,enrichStaticPick);
   if(path==="/_api/admin/mention-status"&&request.method==="POST")return review.setStatus(request,env);
   if(path==="/admin/review")return review.reviewPage(request,env);
@@ -994,6 +998,8 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/most-recommended")return pages.mostRecommended(env);
   if(path==="/search")return pages.search(env,u.searchParams.get("q"),ctx);
   if(path==="/alerts")return pages.alerts(env);
+  if(path==="/people")return peoplePages.index(env);
+  if(path.indexOf("/people/")===0){var pp=await peoplePages.person(env,path.slice(8));if(pp)return pp}
   if(path==="/brands")return pages.brandsPage(env);
   if(path==="/trending")return pages.trending(env);
   if(path==="/methodology")return pages.methodology(env);

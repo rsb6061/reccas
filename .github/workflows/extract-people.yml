@@ -1,15 +1,10 @@
-name: Extract recommendations
+name: Extract people
 
-# Reads cited articles and records every product each one recommends. Uses the Worker's AI key,
-# so the number of articles per run is capped. Runs monthly, or by hand with a chosen limit.
+# Reads the articles and newsletters where tracked people state their own recommendations.
 on:
   schedule:
-    - cron: "41 12 3 * *"
+    - cron: "41 14 3 * *"
   workflow_dispatch:
-    inputs:
-      limit:
-        description: "Maximum articles to read in this run"
-        default: "5"
 
 permissions:
   contents: read
@@ -37,9 +32,5 @@ jobs:
           echo "::add-mask::$KEY"
           echo "$KEY" | npx wrangler secret put VERIFY_KEY
           echo "VERIFY_KEY=$KEY" >> "$GITHUB_ENV"
-      - name: Look for new guides on publishers' own sites
-        run: node scripts/discover-sources.mjs
-      - name: Read articles
-        env:
-          LIMIT: ${{ inputs.limit || '200' }}
-        run: node scripts/extract-recommendations.mjs
+      - name: Read what tracked people recommend
+        run: node scripts/extract-people.mjs

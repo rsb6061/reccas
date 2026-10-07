@@ -13,7 +13,7 @@ const LIMIT = Number(process.env.LIMIT || 5);
 const REFRESH_DAYS = 30;
 const STOP = new Set(["the", "for", "women", "womens", "and", "with", "in", "of"]);
 
-function slugify(v) {
+export function slugify(v) {
   return String(v || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&/g, " and ").replace(/\+/g, " plus ").replace(/['’.]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 const compact = (v) => slugify(v).replace(/-/g, "");
@@ -34,12 +34,12 @@ export function matchProduct(brand, name, known) {
   return hits.length === 1 ? hits[0].key : null;
 }
 
-function articleText(html) {
+export function articleText(html) {
   const cleaned = String(html).replace(/<(script|style|svg|noscript|nav|footer|header|form|aside)[\s\S]*?<\/\1>/gi, " ");
   return visibleText(cleaned).replace(/&amp;/g, "&").replace(/&#x27;|&#39;|&rsquo;/g, "'").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim().slice(0, 48000);
 }
 // A freshly rotated key can take a moment to reach every location, so an unauthorised answer is retried.
-async function api(path, options) {
+export async function api(path, options) {
   for (let attempt = 1; ; attempt++) {
     const r = await fetch(SITE + path, Object.assign({}, options, {headers: Object.assign({"x-verify-key": KEY, "content-type": "application/json"}, options && options.headers)}));
     let body = {};

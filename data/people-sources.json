@@ -1,0 +1,71 @@
+{
+  "_about": "People whose own stated recommendations Reccas tracks, and the articles or newsletters where they state them. Only first-person recommendations count: never what someone was photographed wearing. Products from a brand the person owns or is paid to promote are excluded.",
+  "paige-desorbo": {
+    "name": "Paige DeSorbo",
+    "kind": "personality",
+    "known_for": "Television personality and co-host of the Giggly Squad podcast",
+    "own_brands": ["Daphne"],
+    "articles": [
+      {"source": "NBC Select", "url": "https://www.nbcnews.com/select/shopping/paige-desorbo-favorite-things-rcna348690"},
+      {"source": "Who What Wear", "url": "https://www.whowhatwear.com/paige-desorbo-interview"},
+      {"source": "Who What Wear", "url": "https://www.whowhatwear.com/fashion/cover-features/my-world-paige-desorbo"},
+      {"source": "E! News", "url": "https://www.eonline.com/news/1336893/summer-house-paige-desorbo-fashion-essentials"},
+      {"source": "E! News", "url": "https://www.eonline.com/news/1396855/summer-house-star-paige-desorbo-influenced-me-to-buy-these-products"}
+    ]
+  },
+  "becky-malinsky": {
+    "name": "Becky Malinsky",
+    "kind": "newsletter writer",
+    "known_for": "Writer of the 5 Things You Should Buy newsletter and former Wall Street Journal fashion editor",
+    "own_brands": [],
+    "articles": [
+      {"source": "5 Things You Should Buy", "url": "https://5thingsyoushouldbuy.substack.com/p/5-great-things-july-2026"},
+      {"source": "5 Things You Should Buy", "url": "https://5thingsyoushouldbuy.substack.com/p/ski-season"},
+      {"source": "Big Salad", "url": "https://joannagoddard.substack.com/p/becky-malinsky-favorite-things"},
+      {"source": "Air Mail", "url": "https://airmail.news/issues/2023-7-15/5-things-you-should-buy"}
+    ]
+  },
+  "leandra-medine-cohen": {
+    "name": "Leandra Medine Cohen",
+    "kind": "newsletter writer",
+    "known_for": "Writer of The Cereal Aisle newsletter and founder of Man Repeller",
+    "own_brands": [],
+    "articles": [
+      {"source": "The Cereal Aisle", "url": "https://leandramcohen.substack.com/p/the-fall-dressing-menu-2025"},
+      {"source": "The Cereal Aisle", "url": "https://leandramcohen.substack.com/p/winter-hits-for-spring"},
+      {"source": "The Cereal Aisle", "url": "https://leandramcohen.substack.com/p/no-frills-style-tips-for-your-everyday"},
+      {"source": "Fashionista", "url": "https://fashionista.com/2025/10/leandra-medine-fashion-beauty-interview-swedish-stockings-collaboration"},
+      {"source": "Coveteur", "url": "https://coveteur.com/leandra-medine-cohen-interview"}
+    ]
+  },
+  "allison-bornstein": {
+    "name": "Allison Bornstein",
+    "kind": "stylist",
+    "known_for": "Stylist and author known for the three-word method",
+    "own_brands": [],
+    "articles": [
+      {"source": "Who What Wear", "url": "https://www.whowhatwear.com/allison-bornstein-shopping-advice"},
+      {"source": "Who What Wear", "url": "https://www.whowhatwear.com/allison-bornstein-celebrity-stylist-makeover"},
+      {"source": "ET", "url": "https://www.etonline.com/celebrity-stylist-allison-bornstein-reveals-her-tricks-for-tracking-down-one-of-a-kind-vintage"}
+    ]
+  },
+  "matilda-djerf": {
+    "name": "Matilda Djerf",
+    "kind": "creator",
+    "known_for": "Creator and founder of Djerf Avenue",
+    "own_brands": ["Djerf Avenue"],
+    "articles": [
+      {"source": "Matilda Djerf on Substack", "url": "https://matildadjerf.substack.com/p/july-must-haves-and-non-negotiables"},
+      {"source": "FASHION Magazine", "url": "https://fashionmagazine.com/style/matilda-djerf-style-scandinavian/"}
+    ]
+  },
+  "alix-earle": {
+    "name": "Alix Earle",
+    "kind": "creator",
+    "known_for": "Creator and host of the Hot Mess podcast",
+    "own_brands": [],
+    "articles": [
+      {"source": "Who What Wear", "url": "https://www.whowhatwear.com/fashion/shopping/alix-earle-amazon-prime-day"}
+    ]
+  }
+}
