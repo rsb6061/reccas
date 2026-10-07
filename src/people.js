@@ -23,6 +23,8 @@ export async function savePersonPicks(request, env) {
   await ensurePeople(env);
   const d = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? v : null; };
   const stmts = [env.DB.prepare("INSERT INTO people (slug,name,kind,known_for,updated_on) VALUES (?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET name=excluded.name,kind=excluded.kind,known_for=excluded.known_for,updated_on=excluded.updated_on").bind(slug, String(b.personName).slice(0, 120), String(b.kind || "").slice(0, 60) || null, String(b.knownFor || "").slice(0, 240) || null, day)];
+  // A fresh read replaces the earlier one for this article, so anything it no longer returns is hidden.
+  stmts.push(env.DB.prepare("UPDATE person_picks SET validated=0 WHERE person_slug=? AND url=? AND product_key<>'_read'").bind(slug, url));
   // An empty marker row records that the article was read even when it named nothing usable.
   stmts.push(env.DB.prepare("INSERT INTO person_picks (person_slug,brand,name,product_key,label,url,source,sponsored,validated,extracted_on) VALUES (?,?,?,?,?,?,?,1,0,?) ON CONFLICT(person_slug,url,product_key) DO UPDATE SET extracted_on=excluded.extracted_on").bind(slug, "-", "-", "_read", null, url, String(b.source || "").slice(0, 120), day));
   rows.filter(function (r) { return r && r.brand && r.name && r.productKey; }).forEach(function (r) {
@@ -30,7 +32,7 @@ export async function savePersonPicks(request, env) {
   });
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
   cache = {at: 0, people: null};
-  return Response.json({ok: true, saved: stmts.length - 2});
+  return Response.json({ok: true, saved: stmts.length - 3});
 }
 export async function peopleStatus(request, env) {
   if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});

@@ -25,7 +25,7 @@ async function main() {
     if (personSlug.startsWith("_")) continue;
     const person = registry[personSlug], own = (person.own_brands || []).map(compact);
     for (const article of person.articles) {
-      if (fresh.has(personSlug + "|" + article.url)) continue;
+      if (process.env.FORCE !== "1" && fresh.has(personSlug + "|" + article.url)) continue;
       const page = await fetchPage(article.url);
       if (page.status !== "ok") { total.blocked++; console.log(`  blocked ${person.name}: ${article.source}`); continue; }
       const ex = await api("/_api/admin/extract", {method: "POST", body: JSON.stringify({url: article.url, source: article.source, text: articleText(page.html), person: person.name, ownBrands: person.own_brands || []})});
@@ -33,6 +33,7 @@ async function main() {
       total.articles++;
       const rows = [], seen = new Set();
       for (const p of ex.body.products) {
+        if (!["clothing", "shoes", "bag", "jewelry", "accessory"].includes(p.category)) { total.notFashion = (total.notFashion || 0) + 1; continue; }
         const productKey = slugify(p.brand + " " + p.name);
         if (!productKey || seen.has(productKey)) continue;
         seen.add(productKey);

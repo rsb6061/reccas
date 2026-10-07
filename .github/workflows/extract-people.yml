@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: "41 14 3 * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Set to 1 to re-read articles read in the last 30 days"
+        default: "0"
 
 permissions:
   contents: read
@@ -33,4 +37,6 @@ jobs:
           echo "$KEY" | npx wrangler secret put VERIFY_KEY
           echo "VERIFY_KEY=$KEY" >> "$GITHUB_ENV"
       - name: Read what tracked people recommend
+        env:
+          FORCE: ${{ inputs.force || '0' }}
         run: node scripts/extract-people.mjs
