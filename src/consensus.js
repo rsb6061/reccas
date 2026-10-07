@@ -1,4 +1,5 @@
 import {STATIC_EDITS} from "./static-edits.js";
+import {EXTRA_STATIC_EDITS, DERIVED_GUIDES} from "./recommendation-batch.js";
 
 export const FRANCHISE_YEAR = 2026;
 export const FRANCHISE_PATH = "/recommendations";
@@ -113,6 +114,27 @@ async function loadEdits(env) {
   });
   Object.keys(STATIC_EDITS).forEach(function (slug) {
     if (!bySlug.has(slug)) bySlug.set(slug, {edit: JSON.parse(JSON.stringify(STATIC_EDITS[slug])), isStatic: true});
+  });
+  Object.keys(EXTRA_STATIC_EDITS).forEach(function (slug) {
+    if (!bySlug.has(slug)) bySlug.set(slug, {edit: JSON.parse(JSON.stringify(EXTRA_STATIC_EDITS[slug])), isStatic: true});
+  });
+  Object.keys(DERIVED_GUIDES).forEach(function (slug) {
+    if (bySlug.has(slug)) return;
+    const cfg = DERIVED_GUIDES[slug], picks = [], seen = new Set();
+    (cfg.sourceSlugs || []).forEach(function (sourceSlug) {
+      const source = bySlug.get(GUIDE_REDIRECTS[sourceSlug] || sourceSlug) || bySlug.get(sourceSlug);
+      if (!source || !source.edit || !Array.isArray(source.edit.picks)) return;
+      source.edit.picks.forEach(function (raw) {
+        const hay = (String(raw.brand || "") + " " + String(raw.name || "")).toLowerCase();
+        if (Array.isArray(cfg.include) && cfg.include.length && !cfg.include.some(function (needle) { return hay.indexOf(String(needle).toLowerCase()) >= 0; })) return;
+        const key = slugify(String(raw.brand || "") + " " + String(raw.name || ""));
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        picks.push(JSON.parse(JSON.stringify(raw)));
+      });
+    });
+    if (!picks.length) return;
+    bySlug.set(slug, {edit: Object.assign({}, cfg, {picks: picks.slice(0, Number(cfg.maxPicks || 3))}), isStatic: true});
   });
   return bySlug;
 }
