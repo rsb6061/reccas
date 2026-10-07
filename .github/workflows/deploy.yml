@@ -65,3 +65,20 @@ jobs:
           final=$(curl -fsS "https://reccas.com/_api/catalog-expansion/status?run=${GITHUB_SHA}")
           echo "Final catalog expansion status: $final"
           echo "$final" | grep -q '"complete":true'
+      - name: Audit and refill thin recommendation coverage once
+        run: |
+          curl -fsS "https://reccas.com/_api/recommendation-coverage?run=${GITHUB_SHA}-before" > /tmp/coverage-before.json
+          curl -fsS "https://reccas.com/_api/recommendation-coverage?refill=1&run=${GITHUB_SHA}-refill" > /tmp/coverage-refill.json
+          curl -fsS "https://reccas.com/_api/recommendation-coverage?run=${GITHUB_SHA}-after" > /tmp/coverage-after.json
+          node - <<'NODE'
+          const fs=require("fs");
+          const before=JSON.parse(fs.readFileSync("/tmp/coverage-before.json","utf8"));
+          const refill=JSON.parse(fs.readFileSync("/tmp/coverage-refill.json","utf8"));
+          const after=JSON.parse(fs.readFileSync("/tmp/coverage-after.json","utf8"));
+          const slim=x=>({guideCount:x.guideCount,thinCatalogCount:x.thinCatalogCount,thinEvidenceCount:x.thinEvidenceCount});
+          console.log("COVERAGE_BEFORE "+JSON.stringify(slim(before)));
+          console.log("REFILL_SUMMARY "+JSON.stringify((refill.refill||[]).map(x=>({slug:x.slug,before:x.before,added:x.added,updated:x.updated,brandsAdded:x.brandsAdded,errors:x.errors}))));
+          console.log("COVERAGE_AFTER "+JSON.stringify(slim(after)));
+          console.log("REMAINING_THIN_CATALOG "+JSON.stringify((after.rows||[]).filter(x=>x.thinCatalog).map(x=>({slug:x.slug,catalogProducts:x.catalogProducts,evidenceProducts:x.evidenceProducts,strongProducts:x.strongProducts}))));
+          console.log("THIN_EVIDENCE "+JSON.stringify((after.rows||[]).filter(x=>x.thinEvidence).map(x=>({slug:x.slug,catalogProducts:x.catalogProducts,evidenceProducts:x.evidenceProducts,strongProducts:x.strongProducts,independentSources:x.independentSources}))));
+          NODE
