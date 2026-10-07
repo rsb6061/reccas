@@ -120,7 +120,7 @@ function normalizeEvidence(pick) {
 }
 function independentNames(evidence) {
   const names = [];
-  evidence.forEach(function (ev) { if (ev.independent && names.indexOf(ev.source) < 0) names.push(ev.source); });
+  evidence.forEach(function (ev) { if (ev.independent && !ev.disputed && names.indexOf(ev.source) < 0) names.push(ev.source); });
   return names;
 }
 
@@ -140,7 +140,30 @@ async function loadEdits(env) {
   return bySlug;
 }
 
-function buildCorpus(edits) {
+// Review decisions and source metadata live in the database and are laid over the guide data.
+// "disputed" stays visible but is not counted; "removed" is dropped entirely.
+function applyOverlay(productKey, evidence, overlay) {
+  if (!overlay || !overlay.size) return evidence;
+  return evidence.filter(function (ev) {
+    const o = overlay.get(mentionKey(productKey, ev));
+    if (!o) return true;
+    if (o.status === "removed") return false;
+    if (o.status === "disputed") ev.disputed = true;
+    if (o.author && !ev.author) ev.author = o.author;
+    if (!ev.date && (o.modified_at || o.published_at)) { ev.date = o.modified_at || o.published_at; ev.dateKind = o.modified_at ? "updated" : "published"; }
+    return true;
+  });
+}
+async function loadOverlay(env) {
+  const out = new Map();
+  try {
+    const rows = (await env.DB.prepare("SELECT mention_key,status,author,published_at,modified_at FROM mention_observations WHERE status IS NOT NULL OR author IS NOT NULL OR published_at IS NOT NULL OR modified_at IS NOT NULL").all()).results || [];
+    rows.forEach(function (r) { out.set(r.mention_key, r); });
+  } catch (_) {}
+  return out;
+}
+
+function buildCorpus(edits, overlay) {
   const guides = new Map(), products = new Map(), sources = new Map();
   const members = new Map();
   edits.forEach(function (_, slug) {
@@ -159,7 +182,7 @@ function buildCorpus(edits) {
       (member.edit.picks || []).forEach(function (raw) {
         const key = slugify(String(raw.brand || "") + " " + String(raw.name || ""));
         if (!key) return;
-        const evidence = normalizeEvidence(raw);
+        const evidence = applyOverlay(key, normalizeEvidence(raw), overlay);
         if (!byKey.has(key)) {
           byKey.set(key, Object.assign({}, raw, {key: key, evidence: evidence, _static: member.isStatic, _order: order++}));
         } else {
@@ -204,7 +227,7 @@ function buildCorpus(edits) {
     prod.independent = independentNames(prod.evidence);
     prod.category = prod.appearances[0] ? prod.appearances[0].category : "clothing";
     prod.evidence.forEach(function (ev) {
-      if (!ev.independent) return;
+      if (!ev.independent || ev.disputed) return;
       if (!sources.has(ev.sourceSlug)) sources.set(ev.sourceSlug, {slug: ev.sourceSlug, name: ev.source, mentions: [], productKeys: []});
       const src = sources.get(ev.sourceSlug);
       src.mentions.push({productKey: prod.key, brand: prod.brand, name: prod.name, label: ev.label, url: ev.url, guideSlug: ev.guideSlug});
@@ -215,7 +238,7 @@ function buildCorpus(edits) {
   const productList = Array.from(products.values()).sort(function (a, b) { return b.independent.length - a.independent.length || b.appearances.length - a.appearances.length || (a.brand + a.name).localeCompare(b.brand + b.name); });
   const sourceList = Array.from(sources.values()).sort(function (a, b) { return b.productKeys.length - a.productKeys.length || a.name.localeCompare(b.name); });
   let mentions = 0;
-  productList.forEach(function (p) { p.evidence.forEach(function (ev) { if (ev.independent) mentions++; }); });
+  productList.forEach(function (p) { p.evidence.forEach(function (ev) { if (ev.independent && !ev.disputed) mentions++; }); });
   const counts = {clothing: 0, shoes: 0, bags: 0, accessories: 0};
   guideList.forEach(function (g) { counts[g.category]++; });
   const types = TYPE_MENU_ORDER.map(function (key) {
@@ -232,7 +255,7 @@ let navTypeItems = TYPE_MENU_ORDER.map(function (key) { return {label: TYPES.fin
 export async function getCorpus(env) {
   const now = Date.now();
   if (corpusCache.corpus && now - corpusCache.at < CORPUS_TTL_MS) return corpusCache.corpus;
-  const corpus = buildCorpus(await loadEdits(env));
+  const corpus = buildCorpus(await loadEdits(env), await loadOverlay(env));
   corpusCache = {at: now, corpus: corpus};
   navTypeItems = corpus.types.filter(function (t) { return t.key !== "more"; }).map(function (t) { return {label: t.label, href: t.guides.length === 1 ? "/" + t.guides[0].slug : "/recommendations#" + t.key}; });
   return corpus;
@@ -255,7 +278,23 @@ export async function guideIndex(env) {
 
 /* ---------- observation log: when Reccas first and last saw each mention ---------- */
 
-async function ensureObservationTables(env) {
+const CREATOR_SOURCES = new Set(["kendi-everyday", "terilyn-adams", "the-mom-edit", "notes-from-europe", "the-atlas-heart", "outfitnotes", "youlookfab", "canvelle"]);
+let modelReady = false;
+export function resetCorpusCache() { corpusCache = {at: 0, corpus: null}; }
+export async function ensureObservationTables(env) {
+  if (modelReady) return;
+  await ensureBaseTables(env);
+  const cols = ((await env.DB.prepare("PRAGMA table_info(mention_observations)").all()).results || []).map(function (c) { return c.name; });
+  for (const col of ["author TEXT", "published_at TEXT", "modified_at TEXT", "status TEXT", "status_note TEXT", "reviewed_at TEXT"]) {
+    if (cols.indexOf(col.split(" ")[0]) < 0) await env.DB.prepare("ALTER TABLE mention_observations ADD COLUMN " + col).run();
+  }
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS rec_products (product_key TEXT PRIMARY KEY,brand TEXT NOT NULL,name TEXT NOT NULL,category TEXT,type TEXT,independent_sources INTEGER NOT NULL DEFAULT 0,guides INTEGER NOT NULL DEFAULT 0,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS rec_sources (source_slug TEXT PRIMARY KEY,name TEXT NOT NULL,kind TEXT NOT NULL,weight REAL NOT NULL DEFAULT 1,products INTEGER NOT NULL DEFAULT 0,mentions INTEGER NOT NULL DEFAULT 0,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL)")
+  ]);
+  modelReady = true;
+}
+async function ensureBaseTables(env) {
   await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS mention_observations (mention_key TEXT PRIMARY KEY,product_key TEXT NOT NULL,guide_slug TEXT,source TEXT NOT NULL,source_slug TEXT NOT NULL,url TEXT,label TEXT,independent INTEGER NOT NULL DEFAULT 1,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mention_observations_product ON mention_observations(product_key)"),
@@ -265,13 +304,27 @@ async function ensureObservationTables(env) {
 function mentionKey(productKey, ev) { return productKey + "|" + ev.sourceSlug + "|" + ev.url; }
 
 export async function syncMentions(env) {
-  const corpus = buildCorpus(await loadEdits(env)), today = new Date().toISOString().slice(0, 10);
   await ensureObservationTables(env);
+  const corpus = buildCorpus(await loadEdits(env), await loadOverlay(env)), today = new Date().toISOString().slice(0, 10);
   const stmts = [];
   corpus.productList.forEach(function (prod) {
     prod.evidence.forEach(function (ev) {
       stmts.push(env.DB.prepare("INSERT INTO mention_observations (mention_key,product_key,guide_slug,source,source_slug,url,label,independent,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(mention_key) DO UPDATE SET last_seen=excluded.last_seen,label=excluded.label,independent=excluded.independent").bind(mentionKey(prod.key, ev), prod.key, ev.guideSlug || null, ev.source, ev.sourceSlug, ev.url, ev.label, ev.independent ? 1 : 0, today, today));
     });
+  });
+  corpus.productList.forEach(function (prod) {
+    stmts.push(env.DB.prepare("INSERT INTO rec_products (product_key,brand,name,category,type,independent_sources,guides,first_seen,last_seen) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(product_key) DO UPDATE SET brand=excluded.brand,name=excluded.name,category=excluded.category,type=excluded.type,independent_sources=excluded.independent_sources,guides=excluded.guides,last_seen=excluded.last_seen").bind(prod.key, prod.brand, prod.name, prod.category, guideType({title: prod.appearances[0] ? prod.appearances[0].title : "", slug: prod.appearances[0] ? prod.appearances[0].slug : ""}), prod.independent.length, prod.appearances.length, today, today));
+  });
+  const seenSources = new Map();
+  corpus.productList.forEach(function (prod) {
+    prod.evidence.forEach(function (ev) {
+      if (!seenSources.has(ev.sourceSlug)) seenSources.set(ev.sourceSlug, {name: ev.source, kind: ev.independent ? (CREATOR_SOURCES.has(ev.sourceSlug) ? "creator" : "publication") : "brand_or_retailer", products: new Set(), mentions: 0});
+      const s = seenSources.get(ev.sourceSlug);
+      s.products.add(prod.key); s.mentions++;
+    });
+  });
+  seenSources.forEach(function (s, slug) {
+    stmts.push(env.DB.prepare("INSERT INTO rec_sources (source_slug,name,kind,products,mentions,first_seen,last_seen) VALUES (?,?,?,?,?,?,?) ON CONFLICT(source_slug) DO UPDATE SET name=excluded.name,products=excluded.products,mentions=excluded.mentions,last_seen=excluded.last_seen").bind(slug, s.name, s.kind, s.products.size, s.mentions, today, today));
   });
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
   return {corpus: corpus, mentions: stmts.length, day: today};
@@ -325,7 +378,13 @@ export async function saveMentionChecks(request, env) {
   const stmts = rows.filter(function (r) { return r && r.key && r.productKey && ["verified", "not_found", "blocked"].indexOf(r.status) >= 0; }).map(function (r) {
     return env.DB.prepare("INSERT INTO mention_checks (mention_key,product_key,guide_slug,source,url,status,detail,checked_on,verified_on) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(mention_key) DO UPDATE SET status=excluded.status,detail=excluded.detail,checked_on=excluded.checked_on,guide_slug=excluded.guide_slug,verified_on=COALESCE(excluded.verified_on,mention_checks.verified_on)").bind(String(r.key).slice(0, 1200), String(r.productKey).slice(0, 300), r.guideSlug || null, r.source || null, r.url || null, r.status, r.detail || null, day, r.status === "verified" ? day : null);
   });
+  await ensureObservationTables(env);
+  rows.forEach(function (r) {
+    if (!r || !r.key || !(r.author || r.publishedAt || r.modifiedAt)) return;
+    stmts.push(env.DB.prepare("UPDATE mention_observations SET author=COALESCE(?,author),published_at=COALESCE(?,published_at),modified_at=COALESCE(?,modified_at) WHERE mention_key=?").bind(r.author ? String(r.author).slice(0, 160) : null, /^\d{4}-\d{2}-\d{2}$/.test(String(r.publishedAt || "")) ? r.publishedAt : null, /^\d{4}-\d{2}-\d{2}$/.test(String(r.modifiedAt || "")) ? r.modifiedAt : null, String(r.key).slice(0, 1200)));
+  });
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
+  resetCorpusCache();
   return Response.json({ok: true, saved: stmts.length});
 }
 async function mentionChecks(env, column, value) {
@@ -595,7 +654,7 @@ export function createPages(h) {
       return list.map(function (ev) {
         const c = checks.get(mentionKey(key, ev)), verified = c && c.verified_on ? niceDate(c.verified_on) : "";
         const who = ev.independent ? "<a class='plainLink' href='/sources/" + esc(ev.sourceSlug) + "'>" + esc(ev.source) + "</a>" : esc(ev.source);
-        return "<tr><td>" + who + (ev.author ? "<div class='rankMeta'>" + esc(ev.author) + "</div>" : "") + "</td><td>" + esc(ev.label) + "</td><td>" + esc(verified) + "</td><td>" + (ev.url ? "<a class='plainLink' href='" + esc(ev.url) + "' target='_blank' rel='noreferrer'>Original ↗</a>" : "") + "</td></tr>";
+        return "<tr><td>" + who + (ev.author ? "<div class='rankMeta'>" + esc(ev.author) + "</div>" : "") + "</td><td>" + esc(ev.label) + (ev.disputed ? "<div class='rankMeta'>Under review · not counted</div>" : "") + "</td><td>" + esc(ev.date ? (ev.dateKind === "updated" ? "Updated " : "") + niceDate(ev.date) : "") + "</td><td>" + esc(verified) + "</td><td>" + (ev.url ? "<a class='plainLink' href='" + esc(ev.url) + "' target='_blank' rel='noreferrer'>Original ↗</a>" : "") + "</td></tr>";
       }).join("");
     }
     const indep = prod.evidence.filter(function (ev) { return ev.independent; }), refs = prod.evidence.filter(function (ev) { return !ev.independent; });
@@ -605,8 +664,8 @@ export function createPages(h) {
     const alertBlock = "<div class='signup' style='margin-top:22px;padding:20px'><strong>Get an email if this goes on sale</strong><form class='js-alert' style='margin-top:10px'><input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'><input class='field' type='email' name='email' required autocomplete='email' placeholder='Email address' aria-label='Email address'><button class='btn alt' type='submit'>Watch price</button></form><div class='signupMsg js-alert-msg' role='status'>No account needed.</div></div><script>(function(){var f=document.querySelector('.js-alert'),m=document.querySelector('.js-alert-msg'),w=" + JSON.stringify(watch).replace(/</g, "\\u003c") + ";if(!f)return;f.addEventListener('submit',async function(e){e.preventDefault();var o=Object.fromEntries(new FormData(f).entries());m.textContent='Saving…';try{var r=await fetch('/_api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:o.email,website:o.website,kind:'price_alert',page:location.pathname,watch:w})}),j={};try{j=await r.json()}catch(_){}if(!r.ok){m.textContent=j.error||'Could not save that. Please try again.';return}f.reset();m.textContent='Saved. You are on the sale-alert list for this product.'}catch(_){m.textContent='Could not save that. Please try again.'}})})();</script>";
     const consensusLine = n >= 1 ? "Recommended by " + plural(n, "independent source") + (prod.appearances.length > 1 ? " across " + prod.appearances.length + " categories" : "") : "No independent recommendations recorded yet";
     const body = "<main class='wrap'><section class='hero'><div class='productHero'><img src='" + esc(img) + "' alt='" + esc(prod.brand + " " + prod.name) + "'><div><span class='eyebrow'>" + esc(prod.brand) + "</span><h1 style='font-size:clamp(34px,5vw,54px)'>" + esc(prod.name) + "</h1><p><strong>" + esc(consensusLine) + ".</strong> " + esc([prod.summary, prod.fitNote].filter(Boolean).join(" ")) + "</p><div class='guideRoundups' style='margin-top:14px'>" + appearances + "</div><div class='editActions' style='margin-top:22px'>" + (tracked ? "<a class='btn' href='" + tracked + "' target='_blank' rel='" + rel + "'>Shop at " + esc(shopAt) + (priceText ? " · " + esc(priceText) : "") + "</a>" : "") + "</div>" + alertBlock + "</div></div></section>"
-      + "<section class='section'><h2>Who recommends it</h2><p class='muted'>" + (n ? plural(n, "independent source") + ". Each row links to the original recommendation." : "Reccas has not recorded an independent recommendation for this product.") + " “Last verified” is the most recent date Reccas re-read the source and found the product still recommended there.</p>" + (indep.length ? "<div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Source</th><th>How they described it</th><th>Last verified</th><th>Receipt</th></tr></thead><tbody>" + evidenceRows(indep) + "</tbody></table></div>" : "") + "</section>"
-      + (refs.length ? "<section class='section'><h2>Brand and retailer references</h2><p class='muted'>Used to confirm product details. These are not counted as recommendations.</p><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Page</th><th>What it confirms</th><th>Last verified</th><th>Link</th></tr></thead><tbody>" + evidenceRows(refs) + "</tbody></table></div></section>" : "")
+      + "<section class='section'><h2>Who recommends it</h2><p class='muted'>" + (n ? plural(n, "independent source") + ". Each row links to the original recommendation." : "Reccas has not recorded an independent recommendation for this product.") + " “Last verified” is the most recent date Reccas re-read the source and found the product still recommended there.</p>" + (indep.length ? "<div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Source</th><th>How they described it</th><th>Source dated</th><th>Last verified</th><th>Receipt</th></tr></thead><tbody>" + evidenceRows(indep) + "</tbody></table></div>" : "") + "</section>"
+      + (refs.length ? "<section class='section'><h2>Brand and retailer references</h2><p class='muted'>Used to confirm product details. These are not counted as recommendations.</p><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Page</th><th>What it confirms</th><th>Source dated</th><th>Last verified</th><th>Link</th></tr></thead><tbody>" + evidenceRows(refs) + "</tbody></table></div></section>" : "")
       + priceHistory
       + "<section class='editMethod'><span class='eyebrow'>How this is counted</span><h2>One source, one count.</h2><p>A source is counted once for this product however many of its articles mention it. Reccas may earn a commission from some shopping links, which has no effect on the count. <a class='plainLink' href='/methodology'>Methodology</a>.</p></section></main>";
     const productSchema = {"@type": "Product", name: prod.brand + " " + prod.name, brand: {"@type": "Brand", name: prod.brand}, image: ["https://reccas.com" + img], description: prod.summary || (prod.brand + " " + prod.name)};
@@ -623,7 +682,7 @@ export function createPages(h) {
       + "<h2>How products are ranked</h2><p>Each product’s count is the number of different independent sources that recommend it. A source is counted once per product, even if several of its articles mention it. Within a category, products are ordered by that count; when two products tie, the order is editorial. Commission rates and affiliate availability play no part in the order.</p>"
       + "<h2>How a category gets a winner</h2><p>A category has a Best of Fashion " + FRANCHISE_YEAR + " winner only when its leading product is recommended by at least " + AWARD_MIN_SOURCES + " independent sources. Right now " + a.won.length + " of " + s.guides + " categories meet that bar. The other " + a.pending.length + " are listed as not yet awarded on the <a href='" + FRANCHISE_PATH + "'>Best of Fashion page</a>.</p>"
       + "<h2>Shopping checks and money</h2><p>Reccas checks that each product is still sold and shows a current price where one is available. Some shopping links are affiliate links and Reccas may earn a commission. Where no affiliate link exists, the link goes straight to the product. Nobody can pay to be included or ranked.</p>"
-      + "<h2>How recommendations are kept fresh</h2><p>Every week Reccas re-reads each source article and checks that it still names the product. Each guide shows the date its sources were last verified and how many were confirmed; each product page shows the date per source. Prices are checked daily where a live price is available. A recommendation that can no longer be found is reviewed by a person before anything changes.</p><h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging recommendations on " + TRACKING_STARTED + ", so trends over time are not reported yet.</li><li>Some publishers block automated readers. A source Reccas could not re-read keeps its earlier verified date, or shows none.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
+      + "<h2>How recommendations are kept fresh</h2><p>Every week Reccas re-reads each source article and checks that it still names the product. Each guide shows the date its sources were last verified and how many were confirmed; each product page shows the date per source. Prices are checked daily where a live price is available. A recommendation that can no longer be found is reviewed by a person. If the source turns out to name a different product, the recommendation is marked “under review”, stays visible and stops counting.</p><h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging recommendations on " + TRACKING_STARTED + ", so trends over time are not reported yet.</li><li>Some publishers block automated readers. A source Reccas could not re-read keeps its earlier verified date, or shows none.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
       + "<h2>Corrections</h2><p>If a recommendation is misattributed, a link is broken or a product is matched wrongly, email <a href='mailto:hello@reccas.com'>hello@reccas.com</a> and it will be fixed.</p></section></main>";
     return page("/methodology", "Methodology: How Best of Fashion Is Counted", body, "How Reccas counts fashion recommendations: what qualifies as an independent source, why brand pages are excluded, how products are ranked and where the data is thin.", 200, null, {kind: "article", headline: "How Best of Fashion is counted", breadcrumb: "Methodology", modified: today()});
   }
@@ -639,7 +698,7 @@ export function createPages(h) {
     guide.picks.forEach(function (p) { p.evidence.forEach(function (ev) { if (!ev.independent) return; const c = checks.get(mentionKey(p.key, ev)); if (!c || c.status === "blocked") return; checkable++; if (c.status === "verified" && c.verified_on) { confirmed++; if (c.verified_on > lastVerified) lastVerified = c.verified_on; } }); });
     const cards = picks.map(function (x) {
       const evidence = x.evidence || [], dest = x.shopUrl || x.canonicalUrl || (evidence[0] && evidence[0].url) || null, track = dest ? "/_api/out?edit=" + encodeURIComponent(slug) + "&to=" + encodeURIComponent(dest) : "#";
-      const ev = evidence.map(function (z) { return "<a class='editSource" + (z.independent ? "" : " isReference") + "' href='" + esc(z.url) + "' target='_blank' rel='noreferrer'><strong>" + esc(z.source) + "</strong> · " + esc(z.independent ? z.label : "Brand or retailer page") + " ↗</a>"; }).join("");
+      const ev = evidence.map(function (z) { return "<a class='editSource" + (z.independent && !z.disputed ? "" : " isReference") + "' href='" + esc(z.url) + "' target='_blank' rel='noreferrer'><strong>" + esc(z.source) + "</strong> · " + esc(z.disputed ? "Under review, not counted" : (z.independent ? z.label : "Brand or retailer page")) + " ↗</a>"; }).join("");
       const img = imageUrl({slug: slug, rank: x.rank});
       const visual = "<img src='" + esc(img) + "' alt='" + esc(x.brand + " " + x.name) + "' loading='" + (x.rank === 1 ? "eager" : "lazy") + "'>";
       const watchKey = x.sourceProductId ? "channel3:" + String(x.sourceProductId) : (x.productId ? "product:" + String(x.productId) : (x.canonicalUrl ? "url:" + String(x.canonicalUrl) : "name:" + String(x.brand || "") + "|" + String(x.name || "")));

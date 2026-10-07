@@ -35,6 +35,34 @@ export function mentions(pageText, brand, name) {
 function visibleText(html) {
   return String(html).replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
 }
+function day(v) { const m = String(v || "").match(/\d{4}-\d{2}-\d{2}/); return m ? m[0] : null; }
+// Writer and dates come from the article's own structured data, never inferred.
+export function articleMeta(html) {
+  const out = {author: null, publishedAt: null, modifiedAt: null};
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    const type = [].concat(node["@type"] || []).join(" ");
+    if (/Article|BlogPosting|Review|WebPage/i.test(type)) {
+      if (!out.author && node.author) {
+        const names = [].concat(node.author).map((a) => typeof a === "string" ? a : a && a.name).filter((n) => n && typeof n === "string" && !/^https?:/.test(n));
+        if (names.length) out.author = names.slice(0, 3).join(", ").slice(0, 160);
+      }
+      if (!out.publishedAt) out.publishedAt = day(node.datePublished);
+      if (!out.modifiedAt) out.modifiedAt = day(node.dateModified);
+    }
+    if (node["@graph"]) visit(node["@graph"]);
+  }
+  for (const m of String(html).matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { visit(JSON.parse(m[1])); } catch (_) {}
+  }
+  const meta = (name) => { const m = String(html).match(new RegExp("<meta[^>]+(?:property|name)=[\"']" + name + "[\"'][^>]+content=[\"']([^\"']+)[\"']", "i")); return m ? m[1] : null; };
+  if (!out.publishedAt) out.publishedAt = day(meta("article:published_time"));
+  if (!out.modifiedAt) out.modifiedAt = day(meta("article:modified_time"));
+  if (!out.author) { const a = meta("author"); if (a && !/^https?:/.test(a)) out.author = a.slice(0, 160); }
+  if (out.modifiedAt && out.publishedAt && out.modifiedAt < out.publishedAt) out.modifiedAt = null;
+  return out;
+}
 async function fetchPage(url) {
   try {
     const r = await fetch(url, {redirect: "follow", signal: AbortSignal.timeout(20000), headers: {"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36", accept: "text/html,application/xhtml+xml", "accept-language": "en-US,en;q=0.9"}});
@@ -42,7 +70,7 @@ async function fetchPage(url) {
     const html = await r.text(), text = visibleText(html);
     // JSON-LD and inline data often carry the product list on script-rendered pages.
     if (text.length < 1500 && html.length < 20000) return {status: "blocked", detail: "empty page"};
-    return {status: "ok", text: text + " " + html};
+    return {status: "ok", text: text + " " + html, meta: articleMeta(html)};
   } catch (e) {
     return {status: "blocked", detail: String(e && e.name || e).slice(0, 60)};
   }
@@ -81,15 +109,16 @@ async function main() {
       for (const m of byUrl.get(url)) {
         const status = page.status !== "ok" ? "blocked" : (mentions(page.text, m.brand, m.name) ? "verified" : "not_found");
         tally[status]++;
-        rows.push({m, status, detail: page.detail || null});
+        rows.push({m, status, detail: page.detail || null, meta: page.meta || {}});
       }
     }
   }
   await Promise.all(Array.from({length: CONCURRENCY}, worker));
+  console.log("With writer: " + rows.filter((r) => r.meta.author).length + ", with a date: " + rows.filter((r) => r.meta.publishedAt || r.meta.modifiedAt).length);
   console.log(`Checked ${urls.length} source pages covering ${rows.length} mentions:`, JSON.stringify(tally));
   for (const r of rows.filter((x) => x.status !== "verified")) console.log(`  ${r.status.padEnd(9)} ${r.m.source} -> ${r.m.brand} ${r.m.name}${r.detail ? " (" + r.detail + ")" : ""}`);
   if (DRY_RUN) return;
-  await save(today, rows.map(({m, status, detail}) => ({key: m.key, productKey: m.productKey, guideSlug: m.guideSlug, source: m.source, url: m.url, status, detail})));
+  await save(today, rows.map(({m, status, detail, meta}) => ({key: m.key, productKey: m.productKey, guideSlug: m.guideSlug, source: m.source, url: m.url, status, detail, author: meta.author || null, publishedAt: meta.publishedAt || null, modifiedAt: meta.modifiedAt || null})));
   console.log("Saved " + rows.length + " results.");
 }
 if (import.meta.url === "file://" + process.argv[1]) main().catch((e) => { console.error(e); process.exit(1); });

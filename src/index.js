@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks,signupPopup} from "./consensus.js";
+import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
 const STATIC_COLLECTIONS = {
   "/what-to-wear-by-temperature":["What to Wear by Temperature","Practical outfit ideas organized by temperature and weather."],
@@ -889,6 +890,8 @@ function machineResource(path){
 function faviconResponse(){var raw=atob(FAVICON_B64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Response(bytes,{headers:{"content-type":"image/png","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}})}
 const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick});
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
+async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
+const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
 export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{var r=await syncMentions(env);await syncPrices(env,r.corpus,enrichStaticPick);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
   var u=new URL(request.url),path=u.pathname.replace(/\/+$/,"")||"/";
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
@@ -934,6 +937,8 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(path==="/_api/subscribe"&&request.method==="POST")return subscribe(request,env,ctx,confirmSignup);
   if(path==="/_api/mentions.json"&&request.method==="GET")return mentionsFeed(env);
   if(path==="/_api/admin/mention-checks"&&request.method==="POST")return saveMentionChecks(request,env);
+  if(path==="/_api/admin/mention-status"&&request.method==="POST")return review.setStatus(request,env);
+  if(path==="/admin/review")return review.reviewPage(request,env);
   if(path==="/unsubscribe"&&(request.method==="GET"||request.method==="POST"))return unsubscribePage(request,env);
   if(path==="/")return pages.home(env);
   if(path==="/guides")return guides(env);
