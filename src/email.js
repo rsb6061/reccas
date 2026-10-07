@@ -80,8 +80,8 @@ export async function confirmSignup(env, info) {
   return sendEmail(env, {
     to: info.email, kind: "list_confirm", ref: "newsletter",
     subject: "You are on the Reccas list",
-    html: "<p style=\"font-size:18px\">You are on the Reccas list.</p><p>Reccas tracks what fashion editors, stylists, creators and testers recommend and counts where independent sources agree. You will hear from us when Best of Fashion changes: new winners, products gaining support and ones that have been dropped. It will be occasional.</p><p><a href=\"" + SITE + "/recommendations\" style=\"color:#4255ff\">See Best of Fashion</a></p>",
-    text: "You are on the Reccas list. You will hear from us when Best of Fashion changes: new winners, products gaining support and ones that have been dropped.\n" + SITE + "/recommendations"
+    html: "<p style=\"font-size:18px\">You are on the Reccas list.</p><p>Reccas tracks what fashion editors, stylists, creators and testers recommend and counts where independent sources agree. You will hear from us when a widely recommended product goes on sale, and when Best of Fashion changes: new winners, products gaining support and ones that have been dropped. It will be occasional.</p><p><a href=\"" + SITE + "/recommendations\" style=\"color:#4255ff\">See Best of Fashion</a></p>",
+    text: "You are on the Reccas list. You will hear from us when a widely recommended product goes on sale, and when Best of Fashion changes.\n" + SITE + "/recommendations"
   });
 }
 
@@ -113,6 +113,37 @@ export async function sendPriceDropAlerts(env) {
       subject: label + " is now " + dollars(now) + " (was " + dollars(base) + ")",
       html: "<p style=\"font-size:18px\">" + escHtml(label) + " dropped to <strong>" + escHtml(dollars(now)) + "</strong>, down " + pct + "% from " + escHtml(dollars(base)) + " when you set your alert.</p>" + (prod ? "<p>" + prod.independent.length + " independent sources tracked by Reccas recommend it.</p>" : "") + "<p><a href=\"" + escHtml(link) + "\" style=\"color:#4255ff\">See the price and who recommends it</a></p><p style=\"font-size:13px;color:#6e6882\">Prices change quickly; check the retailer before you buy. Reccas may earn a commission from some shopping links.</p>",
       text: label + " dropped to " + dollars(now) + ", down " + pct + "% from " + dollars(base) + ".\n" + link
+    });
+    if (r.ok) sent++;
+  }
+  return sent;
+}
+
+// List subscribers get at most one digest a week, and only when a tracked product recommended by
+// two or more independent sources is at least 10% below the first price Reccas recorded for it.
+export async function sendSaleDigest(env) {
+  const today = new Date().toISOString().slice(0, 10), corpus = await getCorpus(env);
+  let rows = [];
+  try { rows = (await env.DB.prepare("SELECT p.product_key,p.price now,(SELECT f.price FROM price_observations f WHERE f.product_key=p.product_key ORDER BY f.observed_on ASC LIMIT 1) base FROM price_observations p WHERE p.observed_on=?").bind(today).all()).results || []; } catch (_) { return 0; }
+  const drops = rows.map(function (r) { return {prod: corpus.products.get(r.product_key), now: Number(r.now), base: Number(r.base)}; })
+    .filter(function (d) { return d.prod && d.prod.independent.length >= 2 && d.base > 0 && d.now <= d.base * 0.9; })
+    .sort(function (a, b) { return a.now / a.base - b.now / b.base; }).slice(0, 6);
+  if (!drops.length) return 0;
+  let people = [];
+  try { people = (await env.DB.prepare("SELECT DISTINCT lower(email) email FROM emails WHERE source IN ('newsletter','popup') AND email IS NOT NULL").all()).results || []; } catch (_) { return 0; }
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const items = drops.map(function (d) { const pct = Math.round((1 - d.now / d.base) * 100); return {label: d.prod.brand + " " + d.prod.name, link: SITE + "/products/" + d.prod.key, line: dollars(d.now) + ", down " + pct + "% from " + dollars(d.base), sources: d.prod.independent.length}; });
+  let sent = 0;
+  for (const person of people) {
+    if (sent >= MAX_ALERTS_PER_RUN) break;
+    let recent = null;
+    try { recent = await env.DB.prepare("SELECT id FROM email_log WHERE email=? AND kind='sale_digest' AND ok=1 AND created_at>? LIMIT 1").bind(person.email, weekAgo).first(); } catch (_) {}
+    if (recent) continue;
+    const r = await sendEmail(env, {
+      to: person.email, kind: "sale_digest", ref: today,
+      subject: items.length === 1 ? items[0].label + " is on sale" : items.length + " widely recommended products are on sale",
+      html: "<p style=\"font-size:18px\">On sale now among the products Reccas tracks:</p>" + items.map(function (i) { return "<p><a href=\"" + escHtml(i.link) + "\" style=\"color:#4255ff\">" + escHtml(i.label) + "</a><br>" + escHtml(i.line) + " · recommended by " + i.sources + " independent sources</p>"; }).join("") + "<p style=\"font-size:13px;color:#6e6882\">Prices change quickly; check the retailer before you buy. Reccas may earn a commission from some shopping links.</p>",
+      text: items.map(function (i) { return i.label + ": " + i.line + "\n" + i.link; }).join("\n\n")
     });
     if (r.ok) sent++;
   }

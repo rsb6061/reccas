@@ -393,9 +393,22 @@ export const CONSENSUS_CSS = `
 .editConsensus .editConsensusNote{font-size:12px;color:var(--muted)}
 .editCopy h2 a{color:inherit;text-decoration:none}
 .editCopy h2 a:hover{text-decoration:underline;text-underline-offset:3px}
+.popCard{position:fixed;right:20px;bottom:20px;z-index:60;width:min(360px,calc(100vw - 24px));background:var(--cream);border:1px solid var(--lavender);border-radius:24px;padding:22px;box-shadow:0 24px 60px rgba(27,21,60,.2);opacity:0;transform:translateY(14px);transition:opacity .25s ease,transform .25s ease}
+.popCard.open{opacity:1;transform:translateY(0)}
+.popCard h3{font-size:24px;line-height:1.12;margin:6px 0 8px}
+.popCard p{font-size:14px;line-height:1.5;margin:0 0 12px}
+.popCard form{display:grid;gap:8px}
+.popClose{position:absolute;top:10px;right:12px;border:0;background:transparent;font-size:24px;color:var(--muted);cursor:pointer}
+@media(max-width:720px){.popCard{right:12px;left:12px;bottom:12px;width:auto}}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 @media(max-width:720px){.rankRow{grid-template-columns:30px 60px 1fr;gap:12px}.rankRow img{width:60px;height:60px}.rankCount{grid-column:2/4;text-align:left}.rankCount strong{display:inline;font-size:20px;margin-right:5px}.productHero{grid-template-columns:1fr}}
 `;
+
+// A corner card, not an overlay: it never blocks the page, so it is safe for visitors arriving from search.
+export function signupPopup(path) {
+  if (/^\/(login|signup|wardrobe|unsubscribe|admin)/.test(String(path))) return "";
+  return "<div class='popCard js-pop' role='dialog' aria-label='Sale alerts' hidden><button class='popClose js-pop-close' type='button' aria-label='Close'>×</button><span class='eyebrow'>Sale alerts</span><h3>Know when the most recommended pieces go on sale.</h3><p class='muted'>Reccas tracks prices on the products fashion editors agree on. Leave your email and we will tell you when one drops.</p><form class='js-pop-form'><input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'><input class='field' type='email' name='email' required autocomplete='email' placeholder='Email address' aria-label='Email address'><button class='btn' type='submit'>Get sale alerts</button></form><div class='signupMsg js-pop-msg' role='status'></div></div><script>(function(){var c=document.querySelector('.js-pop');if(!c)return;var K='reccas_popup';function seen(){try{return !!localStorage.getItem(K)}catch(_){return true}}function mark(v){try{localStorage.setItem(K,v)}catch(_){}}if(seen())return;var shown=false;function show(){if(shown||seen())return;shown=true;c.hidden=false;requestAnimationFrame(function(){c.classList.add('open')})}function hide(v){mark(v);c.classList.remove('open');setTimeout(function(){c.hidden=true},250)}var t=setTimeout(show,12000);window.addEventListener('scroll',function(){var d=document.documentElement;if((window.scrollY+window.innerHeight)/d.scrollHeight>0.5){clearTimeout(t);show()}},{passive:true});c.querySelector('.js-pop-close').onclick=function(){hide('dismissed')};var f=c.querySelector('.js-pop-form'),m=c.querySelector('.js-pop-msg');f.addEventListener('submit',async function(e){e.preventDefault();var o=Object.fromEntries(new FormData(f).entries());m.textContent='Saving…';try{var r=await fetch('/_api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:o.email,website:o.website,kind:'newsletter',page:location.pathname+'#popup'})}),j={};try{j=await r.json()}catch(_){}if(!r.ok){m.textContent=j.error||'Could not save that. Please try again.';return}m.textContent='You are on the list.';mark('subscribed');setTimeout(function(){hide('subscribed')},1600)}catch(_){m.textContent='Could not save that. Please try again.'}})})();</script>";
+}
 
 export function createPages(h) {
   const esc = h.esc, money = h.money, page = h.page;
@@ -446,7 +459,7 @@ export function createPages(h) {
       + "<section class='section'><div class='eyebrow'>Browse Best of Fashion</div><h2>" + a.won.length + " winners across " + corpus.stats.guides + " categories</h2><div class='categoryGrid'>" + categoryCards(corpus) + "</div><div class='guideGrid' style='margin-top:22px'>" + tiles + "</div><p style='margin-top:20px'><a class='btn alt' href='" + FRANCHISE_PATH + "'>See all " + corpus.stats.guides + " categories</a></p></section>"
       + "<section class='section'><div class='eyebrow'>How Reccas works</div><h2>Consensus, not a judging panel.</h2><div class='grid'><div class='card'><h3>Track the recommendations</h3><p>We record named product recommendations from fashion publications, editors, stylists, creators and testers, with a link to each one.</p></div><div class='card'><h3>Match the exact product</h3><p>The same item gets described a dozen ways. Reccas resolves each mention to one product so repeated recommendations count together.</p></div><div class='card'><h3>Count independent agreement</h3><p>Products are ranked by how many independent sources recommend them. Brand and retailer pages are shown as references and never counted.</p></div></div><p style='margin-top:20px'><a class='plainLink' href='/methodology'>Read the full methodology →</a></p></section>"
       + signupBlock("/") + "</main>";
-    return page("/", "Best of Fashion " + FRANCHISE_YEAR + ": The Most Recommended Fashion Products", body, "Reccas tracks what fashion editors, stylists, creators and testers recommend, then ranks products by how many independent sources agree. Every count links to its sources.", 200, null, {schema: [{"@type": "WebApplication", name: "Reccas", url: "https://reccas.com/", applicationCategory: "ShoppingApplication", operatingSystem: "Web", description: "Fashion recommendation consensus tracker."}]});
+    return page("/", "Best of Fashion " + FRANCHISE_YEAR + ": The Most Recommended Fashion Products", body, "Reccas tracks what fashion editors, stylists and testers recommend and ranks products by how many independent sources agree. Every count links to its sources.", 200, null, {schema: [{"@type": "WebApplication", name: "Reccas", url: "https://reccas.com/", applicationCategory: "ShoppingApplication", operatingSystem: "Web", description: "Fashion recommendation consensus tracker."}]});
   }
 
   async function recommendations(env) {
@@ -469,7 +482,7 @@ export function createPages(h) {
       + "<section class='section'><div class='eyebrow'>All categories</div><h2>Every category we track</h2><p class='muted'>" + corpus.stats.guides + " category guides, ordered by how many independent sources back each one.</p><div class='categoryGrid'>" + categoryCards(corpus) + "</div><div class='guideGrid' style='margin-top:22px'>" + corpus.guideList.map(guideTile).join("") + "</div></section>"
       + "<section class='editMethod'><span class='eyebrow'>How it works</span><h2>Counted, not judged.</h2><p>Best of Fashion is built from observed recommendations. Reccas counts each independent source once per product, ignores brand and retailer pages, and keeps every source link visible. <a class='plainLink' href='/methodology'>Read the methodology</a>.</p></section>"
       + signupBlock(FRANCHISE_PATH, "Get the " + FRANCHISE_YEAR + " changes as they happen.") + "</main>";
-    return page(FRANCHISE_PATH, "Best of Fashion " + FRANCHISE_YEAR + ": Winners by Editor Consensus", body, "Best of Fashion " + FRANCHISE_YEAR + " by Reccas: the clothes, shoes and bags recommended by the most independent fashion editors, stylists, creators and testers, with every source linked.", 200, null, {kind: "collection", breadcrumb: "Best of Fashion", schema: [listSchema]});
+    return page(FRANCHISE_PATH, "Best of Fashion " + FRANCHISE_YEAR + ": Winners by Editor Consensus", body, "Best of Fashion " + FRANCHISE_YEAR + ": the clothes, shoes and bags recommended by the most independent fashion editors and testers, with every source linked.", 200, null, {kind: "collection", breadcrumb: "Best of Fashion", schema: [listSchema]});
   }
 
   async function categoryPage(env, category) {
@@ -515,6 +528,12 @@ export function createPages(h) {
     return page("/sources/" + slug, "What " + s.name + " Recommends: " + s.productKeys.length + " Fashion Products", body, "The fashion products " + s.name + " has recommended in categories Reccas tracks, with a link to each original recommendation.", 200, indexable ? null : "noindex, follow", {kind: "collection", breadcrumb: s.name});
   }
 
+  function productDescription(prod) {
+    const n = prod.independent.length, base = prod.brand + " " + prod.name + ": recommended by " + plural(n, "independent source");
+    const withNames = n ? base + ", including " + prod.independent.slice(0, 2).join(" and ") + ". Every source linked." : base + ".";
+    return withNames.length <= 160 ? withNames : base + ". Every source linked.";
+  }
+
   async function productPage(env, key) {
     const corpus = await getCorpus(env), prod = corpus.products.get(key);
     if (!prod) return null;
@@ -523,7 +542,7 @@ export function createPages(h) {
     const obs = await productObservations(env, key), checks = await mentionChecks(env, "product_key", key);
     const n = prod.independent.length, price = parsePrice(pick.price), priceText = pick.price == null || pick.price === "" ? "" : (typeof pick.price === "number" ? money(pick.price) : String(pick.price));
     const dest = pick.shopUrl || pick.canonicalUrl || null, tracked = dest ? "/_api/out?edit=" + encodeURIComponent(prod.guideSlug) + "&to=" + encodeURIComponent(dest) : null;
-    const shopAt = String(pick.shopLabel || pick.brand || "retailer").trim(), rel = pick._affiliate ? "sponsored noreferrer" : "noreferrer";
+    const shopAt = String(pick.shopLabel || pick.brand || "retailer").trim(), rel = pick._affiliate || pick.affiliate === true ? "sponsored noreferrer" : "noreferrer";
     const img = imageUrl(prod.image);
     function evidenceRows(list) {
       return list.map(function (ev) {
@@ -545,7 +564,7 @@ export function createPages(h) {
       + "<section class='editMethod'><span class='eyebrow'>How this is counted</span><h2>One source, one count.</h2><p>A source is counted once for this product however many of its articles mention it. Reccas may earn a commission from some shopping links, which has no effect on the count. <a class='plainLink' href='/methodology'>Methodology</a>.</p></section></main>";
     const productSchema = {"@type": "Product", name: prod.brand + " " + prod.name, brand: {"@type": "Brand", name: prod.brand}, image: ["https://reccas.com" + img], description: prod.summary || (prod.brand + " " + prod.name)};
     if (price != null && dest) productSchema.offers = {"@type": "Offer", price: String(price), priceCurrency: "USD", url: dest};
-    return page("/products/" + key, prod.brand + " " + prod.name + ": Who Recommends It", body, prod.brand + " " + prod.name + " is recommended by " + plural(n, "independent source") + (n ? " including " + prod.independent.slice(0, 3).join(", ") : "") + ". See every recommendation with a link to the original.", 200, n >= INDEXABLE_PRODUCT_MIN_SOURCES ? null : "noindex, follow", {kind: "article", headline: prod.brand + " " + prod.name, image: "https://reccas.com" + img, breadcrumb: prod.brand + " " + prod.name, modified: today(), schema: [productSchema]});
+    return page("/products/" + key, prod.brand + " " + prod.name + ": Who Recommends It", body, productDescription(prod), 200, n >= INDEXABLE_PRODUCT_MIN_SOURCES ? null : "noindex, follow", {kind: "article", headline: prod.brand + " " + prod.name, image: "https://reccas.com" + img, breadcrumb: prod.brand + " " + prod.name, modified: today(), schema: [productSchema]});
   }
 
   async function methodology(env) {
@@ -582,7 +601,7 @@ export function createPages(h) {
       const price = x.price == null || x.price === "" ? "" : (typeof x.price === "number" ? money(x.price) : String(x.price));
       const shopAt = String(x.shopLabel || x.brand || "retailer").trim(), action = dest ? "Shop at " + esc(shopAt) + (price ? " · " + esc(price) : "") : "View source";
       const commerceNote = x._catalog && !x._affiliate ? "<span class='muted' style='font-size:12px'>No affiliate link available; this goes directly to the product.</span>" : "";
-      const rel = x._affiliate ? "sponsored noreferrer" : "noreferrer";
+      const rel = x._affiliate || x.affiliate === true ? "sponsored noreferrer" : "noreferrer";
       const description = [x.summary, x.fitNote].filter(Boolean).join(" ");
       const n = x.independent.length;
       const consensus = "<div class='editConsensus'><strong>" + (n ? "Recommended by " + n + " of the " + total + " independent sources in this guide" : "No independent recommendation recorded yet") + "</strong>" + (n ? "<div class='editConsensusSources'>" + namesLine(x.independent, 5) + "</div>" : "") + "</div>";
