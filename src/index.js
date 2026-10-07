@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,navCategories,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks,signupPopup} from "./consensus.js";
+import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks,signupPopup} from "./consensus.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
 const STATIC_COLLECTIONS = {
   "/what-to-wear-by-temperature":["What to Wear by Temperature","Practical outfit ideas organized by temperature and weather."],
@@ -219,7 +219,7 @@ function page(path,title,body,desc,status,robots,extra){
   var icon="/favicon-r.png?v=20261007",robotText=robots||"index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",ogType=extra.kind==="article"?"article":"website";
   var image=extra.image?String(extra.image):"";
   var head="<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+esc(fullTitle)+"</title><meta name='description' content='"+esc(description)+"'><meta name='robots' content='"+esc(robotText)+"'><meta name='googlebot' content='"+esc(robotText)+"'><meta name='application-name' content='Reccas'><meta name='theme-color' content='#f7f0e6'><link rel='canonical' href='"+esc(url)+"'><link rel='manifest' href='/manifest.json?v=20261007'><link rel='icon' type='image/png' sizes='128x128' href='"+icon+"'><link rel='shortcut icon' href='"+icon+"'><link rel='apple-touch-icon' href='"+icon+"'><meta property='og:site_name' content='Reccas'><meta property='og:type' content='"+ogType+"'><meta property='og:title' content='"+esc(fullTitle)+"'><meta property='og:description' content='"+esc(description)+"'><meta property='og:url' content='"+esc(url)+"'>"+(image?"<meta property='og:image' content='"+esc(image)+"'>":"")+"<meta name='twitter:card' content='"+(image?"summary_large_image":"summary")+"'><meta name='twitter:title' content='"+esc(fullTitle)+"'><meta name='twitter:description' content='"+esc(description)+"'>"+(image?"<meta name='twitter:image' content='"+esc(image)+"'>":"")+"<script type='application/ld+json'>"+schema+"</script><script type='text/javascript'>(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,'clarity','script','yu1hc4t3ym');</script><style>"+css+CONSENSUS_CSS+"</style></head><body>";
-  var nav="<header><div class='nav'><a class='brand' href='/'>Reccas</a><nav class='navlinks'><div class='navDrop'><a href='/recommendations'>Best of Fashion "+FRANCHISE_YEAR+"</a><div class='navMenu'>"+navCategories().map(function(c){return "<a href='/recommendations/"+c.key+"'>"+esc(c.label)+"</a>"}).join("")+"</div></div></nav><a class='btn alt' href='/most-recommended'>Most recommended</a></div></header>";
+  var nav=siteHeader();
   var crumb=path!=="/"&&String(robotText).indexOf("noindex")<0?"<div class='breadcrumbs'><a href='/'>Reccas</a><span>›</span><span>"+esc(extra.breadcrumb||title)+"</span></div>":"";
   var foot=signupPopup(path)+"<footer class='footer'><div class='footer-inner'><div><div class='footer-brand'>Reccas</div><div>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s fashion, then shows the products the most independent sources agree on.</div></div><nav class='footer-links'><a href='/recommendations'>Best of Fashion</a><a href='/most-recommended'>Most recommended</a><a href='/sources'>Sources</a><a href='/methodology'>Methodology</a><a href='/about'>About</a><a href='/privacy'>Privacy</a><a href='/llms.txt'>llms.txt</a></nav></div></footer></body></html>";
   return new Response(head+nav+crumb+body+foot,{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":status===404?"no-store":"public, max-age=120","x-content-type-options":"nosniff","referrer-policy":"strict-origin-when-cross-origin"}});
@@ -939,6 +939,8 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(path==="/guides")return guides(env);
   if(path==="/recommendations")return pages.recommendations(env);
   if(path==="/most-recommended")return pages.mostRecommended(env);
+  if(path==="/search")return pages.search(env,u.searchParams.get("q"),ctx);
+  if(path==="/alerts")return pages.alerts(env);
   if(path==="/methodology")return pages.methodology(env);
   if(path==="/sources")return pages.sourcesIndex(env);
   if(path.indexOf("/sources/")===0){var srp=await pages.sourcePage(env,path.slice(9));if(srp)return srp}

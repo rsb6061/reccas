@@ -54,6 +54,29 @@ export function guideCategory(r) {
   return "clothing";
 }
 
+// Product types drive the header menu. Order matters: the first matching type wins.
+export const TYPES = [
+  {key: "sneakers", label: "Sneakers", test: /\b(sneaker|sneakers|travel shoes)\b/},
+  {key: "boots", label: "Boots", test: /\b(boot|boots)\b/},
+  {key: "flats-loafers", label: "Flats & loafers", test: /\b(flat|flats|loafer|loafers|ballet)\b/},
+  {key: "bags", label: "Bags", test: /\b(bag|bags|tote|totes|crossbody)\b/},
+  {key: "coats-blazers", label: "Coats & blazers", test: /\b(coat|coats|trench|blazer|blazers|jacket|jackets)\b/},
+  {key: "sweaters", label: "Sweaters", test: /\b(sweater|sweaters|cardigan|cardigans|cashmere)\b/},
+  {key: "jeans", label: "Jeans", test: /\b(jean|jeans|denim)\b/},
+  {key: "trousers", label: "Trousers", test: /\b(trouser|trousers|pant|pants)\b/},
+  {key: "dresses", label: "Dresses", test: /\b(dress|dresses|shapewear)\b/},
+  {key: "tees-shirts", label: "Tees & shirts", test: /\b(t-shirt|t-shirts|tee|tees|shirt|shirts|button-down)\b/}
+];
+const TYPE_MENU_ORDER = ["tees-shirts", "sweaters", "jeans", "trousers", "dresses", "coats-blazers", "flats-loafers", "sneakers", "boots", "bags"];
+export function guideType(r) {
+  const t = (" " + String((r && r.title) || "") + " " + String((r && r.slug) || "").replace(/-/g, " ") + " ").toLowerCase();
+  for (const type of TYPES) if (type.test.test(t)) return type.key;
+  return null;
+}
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (m) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[m]; });
+}
+
 const SOURCE_ALIASES = {"shop today": "TODAY", "today": "TODAY"};
 const RETAILER_SOURCES = new Set(["nordstrom", "amazon", "zappos", "shopbop", "revolve", "netaporter", "saksfifthavenue", "bloomingdales", "macys"]);
 
@@ -167,6 +190,7 @@ function buildCorpus(edits) {
       merged: slugs.filter(function (s) { return s !== canonical; })
     };
     guide.category = guideCategory(guide);
+    guide.type = guideType(guide);
     guides.set(canonical, guide);
 
     picks.forEach(function (p) {
@@ -194,21 +218,30 @@ function buildCorpus(edits) {
   productList.forEach(function (p) { p.evidence.forEach(function (ev) { if (ev.independent) mentions++; }); });
   const counts = {clothing: 0, shoes: 0, bags: 0, accessories: 0};
   guideList.forEach(function (g) { counts[g.category]++; });
-  return {guides: guides, products: products, sources: sources, guideList: guideList, productList: productList, sourceList: sourceList, stats: {guides: guideList.length, products: productList.length, sources: sourceList.length, mentions: mentions}, categoryCounts: counts};
+  const types = TYPE_MENU_ORDER.map(function (key) {
+    const def = TYPES.find(function (t) { return t.key === key; });
+    return {key: key, label: def.label, guides: guideList.filter(function (g) { return g.type === key; })};
+  }).filter(function (t) { return t.guides.length; });
+  const untyped = guideList.filter(function (g) { return !g.type; });
+  if (untyped.length) types.push({key: "more", label: "More", guides: untyped});
+  return {guides: guides, products: products, sources: sources, guideList: guideList, productList: productList, sourceList: sourceList, stats: {guides: guideList.length, products: productList.length, sources: sourceList.length, mentions: mentions}, categoryCounts: counts, types: types};
 }
 
 let corpusCache = {at: 0, corpus: null};
-let navCategoryKeys = ["clothing", "shoes", "bags"];
+let navTypeItems = TYPE_MENU_ORDER.map(function (key) { return {label: TYPES.find(function (t) { return t.key === key; }).label, href: "/recommendations#" + key}; });
 export async function getCorpus(env) {
   const now = Date.now();
   if (corpusCache.corpus && now - corpusCache.at < CORPUS_TTL_MS) return corpusCache.corpus;
   const corpus = buildCorpus(await loadEdits(env));
   corpusCache = {at: now, corpus: corpus};
-  navCategoryKeys = Object.keys(CATEGORIES).filter(function (k) { return corpus.categoryCounts[k] > 0; });
+  navTypeItems = corpus.types.filter(function (t) { return t.key !== "more"; }).map(function (t) { return {label: t.label, href: t.guides.length === 1 ? "/" + t.guides[0].slug : "/recommendations#" + t.key}; });
   return corpus;
 }
-export function navCategories() {
-  return navCategoryKeys.map(function (k) { return {key: k, label: CATEGORIES[k].label}; });
+const SEARCH_ICON = "<svg viewBox='0 0 24 24' width='18' height='18' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' aria-hidden='true'><circle cx='11' cy='11' r='6.5'></circle><path d='M16 16l4.5 4.5'></path></svg>";
+const HEART_ICON = "<svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z'></path></svg>";
+export function siteHeader() {
+  const menu = navTypeItems.map(function (t) { return "<a href='" + escHtml(t.href) + "'>" + escHtml(t.label) + "</a>"; }).join("");
+  return "<header><div class='nav'><a class='brand' href='/'>Reccas</a><nav class='navlinks'><div class='navDrop'><a href='/recommendations'>Best of Fashion " + FRANCHISE_YEAR + "</a><div class='navMenu navMenuWide'>" + menu + "</div></div></nav><div class='navRight'><form class='navSearch js-search' action='/search' method='get' role='search'><button class='navIcon js-search-toggle' type='button' aria-label='Search' aria-expanded='false'>" + SEARCH_ICON + "</button><input type='search' name='q' placeholder='Search products, brands, sources' aria-label='Search products, brands and sources' maxlength='80'></form><a class='btn alt navTop' href='/most-recommended'>Most recommended</a><a class='btn alt navAlerts' href='/alerts' aria-label='Sale alerts'>" + HEART_ICON + "<span>Sale alerts</span></a></div></div></header><script>(function(){var f=document.querySelector('.js-search');if(!f)return;var b=f.querySelector('.js-search-toggle'),i=f.querySelector('input');function set(o){f.classList.toggle('open',o);b.setAttribute('aria-expanded',o?'true':'false');if(o)i.focus()}b.addEventListener('click',function(){if(!f.classList.contains('open')){set(true);return}if(i.value.trim())f.submit();else set(false)});i.addEventListener('keydown',function(e){if(e.key==='Escape'){set(false);b.focus()}});document.addEventListener('click',function(e){if(!f.contains(e.target)&&!i.value.trim())set(false)})})();</script>";
 }
 export async function getGuide(env, slug) {
   const corpus = await getCorpus(env);
@@ -400,6 +433,20 @@ export const CONSENSUS_CSS = `
 .popCard form{display:grid;gap:8px}
 .popClose{position:absolute;top:10px;right:12px;border:0;background:transparent;font-size:24px;color:var(--muted);cursor:pointer}
 @media(max-width:720px){.popCard{right:12px;left:12px;bottom:12px;width:auto}}
+.navRight{display:flex;align-items:center;gap:8px;position:relative}
+.navMenuWide{display:grid;grid-template-columns:1fr 1fr;min-width:330px}
+.navSearch{display:flex;align-items:center}
+.navIcon{width:40px;height:40px;border:0;border-radius:999px;background:transparent;color:#514b65;display:grid;place-items:center;cursor:pointer}
+.navIcon:hover{background:#efeaff;color:var(--ink)}
+.navSearch input{width:0;opacity:0;border:1px solid transparent;border-radius:999px;padding:0;font:inherit;font-size:14px;background:#fff;color:var(--ink);transition:width .2s ease,opacity .2s ease,padding .2s ease}
+.navSearch.open input{width:250px;opacity:1;padding:9px 14px;border-color:var(--lavender)}
+.navAlerts{display:inline-flex;align-items:center;gap:7px}
+[id]{scroll-margin-top:110px}
+.typeGroup{margin-top:34px}
+.typeGroup h3{font-size:28px;margin:0 0 14px}
+.searchForm{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px;max-width:620px}
+.searchForm .field{flex:1;min-width:220px}
+@media(max-width:760px){.navRight{margin-left:auto;gap:4px;position:static}.nav{position:relative}.navAlerts span{display:none}.navAlerts{padding:9px 11px}.navSearch.open{position:absolute;left:8px;right:8px;top:8px;bottom:8px;background:#fff;border-radius:999px;z-index:5}.navSearch.open input{flex:1;width:auto}}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 @media(max-width:720px){.rankRow{grid-template-columns:30px 60px 1fr;gap:12px}.rankRow img{width:60px;height:60px}.rankCount{grid-column:2/4;text-align:left}.rankCount strong{display:inline;font-size:20px;margin-right:5px}.productHero{grid-template-columns:1fr}}
 `;
@@ -479,7 +526,7 @@ export function createPages(h) {
     const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Reccas · " + FRANCHISE_YEAR + " edition</span><h1>Best of Fashion " + FRANCHISE_YEAR + "</h1><p>The women’s clothes, shoes and bags that independent fashion editors, stylists, creators and testers agree on most. A product wins its category only when at least " + AWARD_MIN_SOURCES + " independent sources recommend it. There is no judging panel and no paid placement.</p><div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:24px'><a class='btn' href='/most-recommended'>Full ranking</a><a class='btn alt' href='/methodology'>Methodology</a></div>" + statRow(corpus.stats) + "</section>"
       + "<section class='section'><div class='eyebrow'>" + FRANCHISE_YEAR + " winners</div><h2 style='margin-bottom:0'>" + a.won.length + " categories with a clear winner</h2></section>" + sections
       + (pending ? "<section class='section'><div class='eyebrow'>Not yet awarded</div><h2>Categories still gathering evidence</h2><p class='muted'>The current leader in each of these has fewer than " + AWARD_MIN_SOURCES + " independent sources, so no winner is named yet.</p><div class='tablewrap' style='padding:6px 14px;margin-top:16px'><table class='evidenceTable'><thead><tr><th>Category</th><th>Current leader</th><th>Evidence</th></tr></thead><tbody>" + pending + "</tbody></table></div></section>" : "")
-      + "<section class='section'><div class='eyebrow'>All categories</div><h2>Every category we track</h2><p class='muted'>" + corpus.stats.guides + " category guides, ordered by how many independent sources back each one.</p><div class='categoryGrid'>" + categoryCards(corpus) + "</div><div class='guideGrid' style='margin-top:22px'>" + corpus.guideList.map(guideTile).join("") + "</div></section>"
+      + "<section class='section'><div class='eyebrow'>All categories</div><h2>Every category we track</h2><p class='muted'>" + corpus.stats.guides + " category guides, ordered by how many independent sources back each one.</p><div class='categoryGrid'>" + categoryCards(corpus) + "</div>" + corpus.types.map(function (t) { return "<div class='typeGroup' id='" + esc(t.key) + "'><h3>" + esc(t.label) + "</h3><div class='guideGrid'>" + t.guides.map(guideTile).join("") + "</div></div>"; }).join("") + "</section>"
       + "<section class='editMethod'><span class='eyebrow'>How it works</span><h2>Counted, not judged.</h2><p>Best of Fashion is built from observed recommendations. Reccas counts each independent source once per product, ignores brand and retailer pages, and keeps every source link visible. <a class='plainLink' href='/methodology'>Read the methodology</a>.</p></section>"
       + signupBlock(FRANCHISE_PATH, "Get the " + FRANCHISE_YEAR + " changes as they happen.") + "</main>";
     return page(FRANCHISE_PATH, "Best of Fashion " + FRANCHISE_YEAR + ": Women’s Winners by Editor Consensus", body, "Best of Fashion " + FRANCHISE_YEAR + ": the women’s clothes, shoes and bags recommended by the most independent fashion editors and testers, with every source linked.", 200, null, {kind: "collection", breadcrumb: "Best of Fashion", schema: [listSchema]});
@@ -618,9 +665,51 @@ export function createPages(h) {
     return page("/" + slug, guide.seoTitle, "<main class='wrap'><section class='hero editHero'><span class='eyebrow'>Best of Fashion " + FRANCHISE_YEAR + " · " + esc(CATEGORIES[guide.category].label) + "</span><h1>" + esc(guide.title) + "</h1><p>" + esc(guide.deck || guide.description) + "</p>" + metrics + "</section>" + intro + "<section class='editList'>" + cards + "</section>" + method + "</main>" + watchUi + watchScript, guide.description || guide.deck || guide.title, 200, null, {kind: "article", headline: guide.title, image: socialImage, breadcrumb: guide.title, schema: [listSchema]});
   }
 
+  async function search(env, rawQuery, ctx) {
+    const q = String(rawQuery || "").trim().slice(0, 80), tokens = slugify(q).split("-").filter(Boolean), corpus = await getCorpus(env);
+    const SYNONYMS = {tee: ["t-shirt"], tees: ["t-shirt"], tshirt: ["t-shirt"], tshirts: ["t-shirt"], trainer: ["sneaker"], trainers: ["sneaker"], pants: ["trouser", "pant"], trousers: ["trouser", "pant"], purse: ["bag"], handbag: ["bag"], jumper: ["sweater"], jumpers: ["sweater"], denim: ["jean"], pumps: ["heel", "flat"], coat: ["coat", "trench"], shirt: ["shirt", "button-down"]};
+    const variants = tokens.map(function (tok) { return [tok, tok.replace(/(es|s)$/, "")].concat(SYNONYMS[tok] || []).filter(function (v) { return v.length > 1; }); });
+    function hit(text) { const t = slugify(text); return variants.every(function (vs) { return vs.some(function (v) { return t.indexOf(v) >= 0; }); }); }
+    let products = [], guides = [], sources = [];
+    if (tokens.length) {
+      products = corpus.productList.filter(function (p) { return hit(p.brand + " " + p.name + " " + p.appearances.map(function (a) { return a.title; }).join(" ")); }).slice(0, 24);
+      guides = corpus.guideList.filter(function (g) { return hit(g.title + " " + g.slug); }).slice(0, 12);
+      sources = corpus.sourceList.filter(function (s) { return hit(s.name); }).slice(0, 12);
+      if (ctx) ctx.waitUntil((async function () { try { await env.DB.prepare("CREATE TABLE IF NOT EXISTS search_queries (id INTEGER PRIMARY KEY AUTOINCREMENT,q TEXT NOT NULL,products INTEGER,guides INTEGER,sources INTEGER,created_at TEXT NOT NULL)").run(); await env.DB.prepare("INSERT INTO search_queries (q,products,guides,sources,created_at) VALUES (?,?,?,?,?)").bind(q.toLowerCase(), products.length, guides.length, sources.length, new Date().toISOString()).run(); } catch (_) {} })());
+    }
+    const none = tokens.length && !products.length && !guides.length && !sources.length;
+    const form = "<form class='searchForm' action='/search' method='get' role='search'><input class='field' type='search' name='q' value='" + esc(q) + "' placeholder='A product, brand or publication' aria-label='Search' maxlength='80'><button class='btn' type='submit'>Search</button></form>";
+    const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Search</span><h1>" + (tokens.length ? "Results for “" + esc(q) + "”" : "Search Reccas") + "</h1><p>Search the " + corpus.stats.products + " products, " + corpus.stats.guides + " categories and " + corpus.stats.sources + " sources Reccas tracks.</p>" + form + "</section>"
+      + (none ? "<section class='section'><p class='muted'>Nothing Reccas tracks matches that yet. Try a brand or a product type, or browse <a class='plainLink' href='/recommendations'>Best of Fashion</a>.</p></section>" : "")
+      + (products.length ? "<section class='section'><h2>" + plural(products.length, "product") + "</h2><div class='rankList'>" + products.map(function (p) { return productRow(p, "·", p.appearances[0] ? p.appearances[0].title : ""); }).join("") + "</div></section>" : "")
+      + (guides.length ? "<section class='section'><h2>" + plural(guides.length, "category", "categories") + "</h2><div class='guideGrid'>" + guides.map(guideTile).join("") + "</div></section>" : "")
+      + (sources.length ? "<section class='section'><h2>" + plural(sources.length, "source") + "</h2><div class='guideRoundups'>" + sources.map(function (s) { return "<a class='guidePill' href='/sources/" + esc(s.slug) + "'>" + esc(s.name) + " · " + plural(s.productKeys.length, "product") + " <span>→</span></a>"; }).join("") + "</div></section>" : "")
+      + (!tokens.length ? "<section class='section'><div class='eyebrow'>Popular</div><div class='rankList'>" + corpus.productList.slice(0, 6).map(function (p, i) { return productRow(p, i + 1); }).join("") + "</div></section>" : "") + "</main>";
+    return page("/search", tokens.length ? "Search: " + q : "Search Reccas", body, "Search the fashion products, categories and sources Reccas tracks.", 200, "noindex, follow");
+  }
+
+  async function alerts(env) {
+    const corpus = await getCorpus(env);
+    let onSale = [], since = "";
+    try {
+      const rows = (await env.DB.prepare("SELECT product_key,observed_on,price FROM price_observations ORDER BY observed_on ASC").all()).results || [], first = new Map(), last = new Map();
+      rows.forEach(function (r) { if (!first.has(r.product_key)) first.set(r.product_key, r); last.set(r.product_key, r); if (!since) since = r.observed_on; });
+      last.forEach(function (now, key) { const base = first.get(key), prod = corpus.products.get(key); if (prod && base && Number(base.price) > 0 && Number(now.price) <= Number(base.price) * 0.9) onSale.push({prod: prod, now: Number(now.price), base: Number(base.price)}); });
+      onSale.sort(function (a, b) { return a.now / a.base - b.now / b.base; });
+    } catch (_) {}
+    const tracked = corpus.productList.filter(function (p) { return p.pick._static; }).length;
+    const saleRows = onSale.slice(0, 20).map(function (d) { return productRow(d.prod, "↓", money(d.now) + ", down " + Math.round((1 - d.now / d.base) * 100) + "% from " + money(d.base)); }).join("");
+    const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Sale alerts</span><h1>Know when the most recommended pieces go on sale.</h1><p>Reccas checks live prices every day on the products fashion editors agree on. Join the list for a weekly note when one drops, or tap the heart on any product to watch that one.</p></section>"
+      + signupBlock("/alerts", "Get sale alerts by email.", "At most one email a week, and only when a product recommended by two or more independent sources is at least 10% below the price Reccas first recorded. No account needed.")
+      + "<section class='section'><div class='eyebrow'>On sale now</div><h2>" + (onSale.length ? plural(onSale.length, "tracked product") + " below its starting price" : "Nothing tracked is on sale today") + "</h2>" + (onSale.length ? "<div class='rankList'>" + saleRows + "</div>" : "<p class='muted'>" + (since ? "Reccas has recorded prices since " + esc(since) + " and none of the tracked products is 10% or more below its first recorded price." : "Daily price tracking has just started, so there is no price history to compare yet.") + " Live prices are currently checked on " + tracked + " of " + corpus.stats.products + " products.</p>") + "</section>"
+      + "<section class='section'><div class='eyebrow'>How it works</div><div class='grid'><div class='card'><h3>Tap the heart</h3><p>On any guide or product page, tap the heart and leave your email. No account needed.</p></div><div class='card'><h3>Reccas checks daily</h3><p>Where a live price is available it is recorded every day, so a drop is measured against a real starting price.</p></div><div class='card'><h3>One clear email</h3><p>You hear when the product you are watching falls 5% or more. Every email has an unsubscribe link.</p></div></div></section>"
+      + "<section class='section'><div class='eyebrow'>Start with these</div><h2>Most recommended products to watch</h2><div class='rankList'>" + corpus.productList.slice(0, 8).map(function (p, i) { return productRow(p, i + 1); }).join("") + "</div></section></main>";
+    return page("/alerts", "Sale Alerts on the Most Recommended Fashion Products", body, "Get an email when the fashion products editors recommend most go on sale. Reccas checks live prices daily and measures drops against a recorded starting price.", 200, null, {kind: "collection", breadcrumb: "Sale alerts"});
+  }
+
   async function sitemapEntries(env) {
     const corpus = await getCorpus(env), day = today(), out = [];
-    ["/", FRANCHISE_PATH, "/most-recommended", "/sources", "/methodology", "/about", "/press", "/developers", "/privacy"].forEach(function (p) { out.push({p: p, last: day}); });
+    ["/", FRANCHISE_PATH, "/most-recommended", "/alerts", "/sources", "/methodology", "/about", "/press", "/developers", "/privacy"].forEach(function (p) { out.push({p: p, last: day}); });
     Object.keys(CATEGORIES).forEach(function (k) { if (corpus.categoryCounts[k] > 0) out.push({p: "/recommendations/" + k, last: day}); });
     corpus.guideList.forEach(function (g) { out.push({p: "/" + g.slug, last: day}); });
     corpus.productList.forEach(function (p) { if (p.independent.length >= INDEXABLE_PRODUCT_MIN_SOURCES) out.push({p: "/products/" + p.key, last: day}); });
@@ -628,5 +717,5 @@ export function createPages(h) {
     return out;
   }
 
-  return {home: home, recommendations: recommendations, categoryPage: categoryPage, mostRecommended: mostRecommended, sourcesIndex: sourcesIndex, sourcePage: sourcePage, productPage: productPage, methodology: methodology, guidePage: guidePage, sitemapEntries: sitemapEntries};
+  return {home: home, recommendations: recommendations, categoryPage: categoryPage, mostRecommended: mostRecommended, sourcesIndex: sourcesIndex, sourcePage: sourcePage, productPage: productPage, methodology: methodology, guidePage: guidePage, search: search, alerts: alerts, sitemapEntries: sitemapEntries};
 }
