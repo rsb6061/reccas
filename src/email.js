@@ -31,8 +31,8 @@ async function unsubscribeUrl(env, email) {
   return t ? SITE + "/unsubscribe?e=" + encodeURIComponent(email) + "&t=" + t : null;
 }
 
-function layout(bodyHtml, unsubUrl) {
-  return "<div style=\"font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:24px;color:#1b153c;line-height:1.55\"><div style=\"font-size:22px;margin-bottom:18px\">Reccas</div>" + bodyHtml + "<p style=\"font-family:Arial,sans-serif;font-size:12px;color:#6e6882;margin-top:28px;border-top:1px solid #d9d3ef;padding-top:14px\">You are getting this because this address was entered at reccas.com. " + (unsubUrl ? "<a href=\"" + escHtml(unsubUrl) + "\" style=\"color:#6e6882\">Unsubscribe</a>." : "Reply to this email to be removed.") + "</p></div>";
+function layout(bodyHtml, unsubUrl, manageUrl) {
+  return "<div style=\"font-family:Georgia,serif;max-width:520px;margin:0 auto;padding:24px;color:#1b153c;line-height:1.55\"><div style=\"font-size:22px;margin-bottom:18px\">Reccas</div>" + bodyHtml + "<p style=\"font-family:Arial,sans-serif;font-size:12px;color:#6e6882;margin-top:28px;border-top:1px solid #d9d3ef;padding-top:14px\">You are getting this because this address was entered at reccas.com. " + (manageUrl ? "<a href=\"" + escHtml(manageUrl) + "\" style=\"color:#6e6882\">See and remove your sale alerts</a>. " : "") + (unsubUrl ? "<a href=\"" + escHtml(unsubUrl) + "\" style=\"color:#6e6882\">Unsubscribe from everything</a>." : "Reply to this email to be removed.") + "</p></div>";
 }
 
 // Returns {ok, error}. Never throws: a failed email must not fail the signup that triggered it.
@@ -51,7 +51,7 @@ export async function sendEmail(env, msg) {
       else if (perHour && perHour.n >= MAX_PER_HOUR) error = "hourly limit";
       else {
         const unsub = await unsubscribeUrl(env, to);
-        await env.EMAIL.send({from: FROM, to: to, replyTo: FROM.email, subject: String(msg.subject), html: layout(msg.html, unsub), text: String(msg.text || "") + (unsub ? "\n\nUnsubscribe: " + unsub : "")});
+        await env.EMAIL.send({from: FROM, to: to, replyTo: FROM.email, subject: String(msg.subject), html: layout(msg.html, unsub, unsub ? unsub.replace("/unsubscribe?", "/alerts/manage?") : null), text: String(msg.text || "") + (unsub ? "\n\nSee and remove your sale alerts: " + unsub.replace("/unsubscribe?", "/alerts/manage?") + "\nUnsubscribe from everything: " + unsub : "")});
         ok = true;
       }
     }
@@ -148,6 +148,60 @@ export async function sendSaleDigest(env) {
     if (r.ok) sent++;
   }
   return sent;
+}
+
+// What a signed-in person is watching: alerts saved to their account plus any set earlier with the same email.
+async function alertsFor(env, userId, email) {
+  const corpus = await getCorpus(env), out = [], seen = new Set();
+  function add(r) {
+    if (!r.watch_key || seen.has(r.watch_key)) return;
+    seen.add(r.watch_key);
+    const key = slugify(String(r.brand || "") + " " + String(r.product_name || "")), prod = corpus.products.get(key);
+    out.push({watchKey: r.watch_key, label: [r.brand, r.product_name].filter(Boolean).join(" ") || "Product", price: r.baseline_price, url: prod ? "/products/" + prod.key : null});
+  }
+  if (userId != null) { try { ((await env.DB.prepare("SELECT watch_key,brand,product_name,baseline_price FROM price_watches WHERE user_id=? AND status='active' ORDER BY updated_at DESC LIMIT 200").bind(userId).all()).results || []).forEach(add); } catch (_) {} }
+  if (email) { try { ((await env.DB.prepare("SELECT watch_key,brand,product_name,baseline_price FROM price_alert_emails WHERE email=? AND status='active' ORDER BY created_at DESC LIMIT 200").bind(String(email).toLowerCase()).all()).results || []).forEach(add); } catch (_) {} }
+  return out;
+}
+async function removeAlert(env, userId, email, watchKey) {
+  const now = new Date().toISOString();
+  if (userId != null) { try { await env.DB.prepare("UPDATE price_watches SET status='removed',updated_at=? WHERE user_id=? AND watch_key=?").bind(now, userId, watchKey).run(); } catch (_) {} }
+  if (email) { try { await env.DB.prepare("UPDATE price_alert_emails SET status='removed' WHERE email=? AND watch_key=?").bind(String(email).toLowerCase(), watchKey).run(); } catch (_) {} }
+}
+export async function myAlerts(request, env, sessionUser) {
+  const who = await sessionUser(request, env), headers = {"Cache-Control": "no-store"};
+  if (!who) return Response.json({error: "Not signed in"}, {status: 401, headers: headers});
+  return Response.json({email: who.user.email, alerts: await alertsFor(env, who.user.id, who.user.email)}, {headers: headers});
+}
+export async function removeMyAlert(request, env, sessionUser) {
+  const who = await sessionUser(request, env), headers = {"Cache-Control": "no-store"};
+  if (!who) return Response.json({error: "Not signed in"}, {status: 401, headers: headers});
+  let b = {};
+  try { b = await request.json(); } catch (_) {}
+  const key = String(b.watchKey || "").slice(0, 500);
+  if (!key) return Response.json({error: "Missing product"}, {status: 400, headers: headers});
+  await removeAlert(env, who.user.id, who.user.email, key);
+  return Response.json({ok: true}, {headers: headers});
+}
+// For people who set alerts with only an email: the signed link in their emails opens this list.
+export function createManage(h) {
+  const page = h.page, esc = h.esc;
+  function view(title, body) { return page("/alerts/manage", title, "<main class='wrap'><section class='hero'><span class='eyebrow'>Sale alerts</span><h1>" + esc(title) + "</h1>" + body + "</section></main>", "Manage your Reccas sale alerts.", 200, "noindex, nofollow"); }
+  return async function manage(request, env) {
+    const u = new URL(request.url), email = String(u.searchParams.get("e") || "").trim().toLowerCase(), token = String(u.searchParams.get("t") || "");
+    const expected = email ? await unsubscribeToken(env, email) : null;
+    if (!expected || token !== expected) return view("This link is not valid", "<p>Sign in on the <a class='plainLink' href='/alerts'>sale alerts page</a> to see what you are watching, or email <a class='plainLink' href='mailto:hello@reccas.com'>hello@reccas.com</a>.</p>");
+    const self = "/alerts/manage?e=" + encodeURIComponent(email) + "&t=" + esc(token);
+    if (request.method === "POST") {
+      let key = "";
+      try { key = String((await request.formData()).get("k") || "").slice(0, 500); } catch (_) {}
+      if (key) await removeAlert(env, null, email, key);
+      return Response.redirect("https://reccas.com" + self.replace(/&amp;/g, "&"), 303);
+    }
+    const alerts = await alertsFor(env, null, email);
+    const rows = alerts.map(function (x) { return "<tr><td>" + (x.url ? "<a class='plainLink' href='" + esc(x.url) + "'>" + esc(x.label) + "</a>" : esc(x.label)) + "</td><td>" + (x.price != null ? "$" + Number(x.price).toFixed(Number(x.price) % 1 ? 2 : 0) : "") + "</td><td><form method='post' action='" + self + "'><input type='hidden' name='k' value='" + esc(x.watchKey) + "'><button class='btn alt' type='submit' style='padding:7px 12px;font-size:12px'>Remove</button></form></td></tr>"; }).join("");
+    return view("Your sale alerts", "<p>" + esc(email) + " will get an email if any of these drops 5% or more.</p>" + (alerts.length ? "<div class='tablewrap' style='padding:6px 14px;margin-top:18px'><table class='evidenceTable'><thead><tr><th>Product</th><th>Price when you started</th><th></th></tr></thead><tbody>" + rows + "</tbody></table></div>" : "<p class='muted'>You are not watching anything at the moment.</p>") + "<p style='margin-top:22px' class='muted'>Prefer one place for everything? <a class='plainLink' href='/_api/auth/google_authorize?returnTo=%2Falerts'>Continue with Google</a> using this address and these alerts will appear in your account.</p>");
+  };
 }
 
 export function createUnsubscribe(h) {
