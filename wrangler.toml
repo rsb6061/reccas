@@ -14,5 +14,9 @@ binding = "DB"
 database_name = "reccas"
 database_id = "f06da302-549f-4059-a8bd-39956188c1d8"
 
+# Cloudflare Email Service, sending from hello@reccas.com.
+[[send_email]]
+name = "EMAIL"
+
 [triggers]
 crons = ["17 9 * * *"]

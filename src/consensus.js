@@ -280,7 +280,7 @@ async function productObservations(env, productKey) {
 
 /* ---------- email capture: newsletter and no-account sale alerts ---------- */
 
-export async function subscribe(request, env) {
+export async function subscribe(request, env, ctx, onNew) {
   const headers = {"Cache-Control": "no-store"};
   let b = {};
   try { b = await request.json(); } catch (_) {}
@@ -291,13 +291,16 @@ export async function subscribe(request, env) {
   const pageSlug = page.replace(/^\/+/, "").slice(0, 200) || null;
   try {
     const existing = await env.DB.prepare("SELECT id FROM emails WHERE email=? AND source=? LIMIT 1").bind(email, kind).first();
+    let isNew = !existing && kind === "newsletter";
     if (!existing) await env.DB.prepare("INSERT INTO emails (email,source_page,page_slug,source,created_at) VALUES (?,?,?,?,?)").bind(email, page || null, pageSlug, kind, now).run();
     if (kind === "price_alert") {
       const w = b.watch || {}, key = String(w.watchKey || "").trim().slice(0, 500);
       if (!key) return Response.json({error: "Missing product."}, {status: 400, headers: headers});
       await env.DB.prepare("CREATE TABLE IF NOT EXISTS price_alert_emails (id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT NOT NULL,watch_key TEXT NOT NULL,brand TEXT,product_name TEXT,product_url TEXT,guide_slug TEXT,baseline_price REAL,status TEXT DEFAULT 'active',created_at TEXT NOT NULL,UNIQUE(email,watch_key))").run();
+      isNew = !(await env.DB.prepare("SELECT id FROM price_alert_emails WHERE email=? AND watch_key=? AND status='active' LIMIT 1").bind(email, key).first());
       await env.DB.prepare("INSERT INTO price_alert_emails (email,watch_key,brand,product_name,product_url,guide_slug,baseline_price,created_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(email,watch_key) DO UPDATE SET status='active'").bind(email, key, String(w.brand || "").slice(0, 200), String(w.name || "").slice(0, 300), String(w.productUrl || "").slice(0, 1000), String(w.guideSlug || "").slice(0, 200), parsePrice(w.price), now).run();
     }
+    if (isNew && onNew && ctx) ctx.waitUntil(onNew(env, {email: email, kind: kind, watch: b.watch || null}));
   } catch (_) {
     return Response.json({error: "Could not save that right now. Please try again."}, {status: 500, headers: headers});
   }
