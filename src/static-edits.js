@@ -254,37 +254,25 @@ export const STATIC_EDITS={
     "seoTitle": "Best White T-Shirts for Women, Tested by Fashion Editors",
     "description": "White T-shirts editors repeatedly wear and test for opacity, shape retention, fit and washability.",
     "deck": "A white tee is simple enough that fabric weight, opacity and cut do all the work. These are the shirts editors repeatedly come back to.",
-    "checkedLabel": "Sep 2026",
-    "freshnessCopy": "Each T-shirt must still be sold and have hands-on editorial evidence for fit, fabric, opacity or repeat washing.",
+    "checkedLabel": "Oct 2026",
+    "freshnessCopy": "Each T-shirt must still be sold and have hands-on editorial evidence for fit, fabric, opacity or repeat washing. Product matching is checked against Channel3 before Reccas shows a shopping link.",
     "picks": [
       {
         "rank": 1,
         "brand": "COS",
         "name": "Clean Cut Regular T-Shirt",
-        "catalogQuery": "Clean Cut",
+        "catalogQuery": "Clean Cut Regular T-Shirt",
+        "channel3Query": "COS Clean Cut Regular T-Shirt white women",
+        "requiredTitleTerms": ["clean", "cut", "t-shirt"],
+        "excludeTitleTerms": ["dress", "long-sleeve", "long sleeve", "tank"],
+        "canonicalUrl": "https://www.cos.com/en-us/women/womenswear/tshirts/regular/product/the-clean-cut-t-shirt-white-0960679001",
         "summary": "The clearest consensus pick: multiple editorial teams praise the substantial, opaque fabric and slightly boxy shape.",
         "fitNote": "The structured mid-weight cotton is the appeal; choose something lighter if you want a drapey or tissue-thin tee.",
         "evidence": [
-          {
-            "source": "Women's Health",
-            "label": "Best structured · editor tested",
-            "url": "https://www.womenshealthmag.com/style/g60815383/best-white-t-shirts-for-women/"
-          },
-          {
-            "source": "Who What Wear",
-            "label": "Best overall · multiple editors",
-            "url": "https://www.whowhatwear.com/best-white-t-shirts-for-women-uk"
-          },
-          {
-            "source": "Harper's Bazaar",
-            "label": "Editor-reviewed polished basic",
-            "url": "https://www.harpersbazaar.com/fashion/trends/g39765610/best-womens-t-shirts/"
-          },
-          {
-            "source": "Glamour UK",
-            "label": "Top editor-tested white tee",
-            "url": "https://www.glamourmagazine.co.uk/gallery/best-white-tshirt-women"
-          }
+          {"source":"Women's Health","label":"Best structured · editor tested","url":"https://www.womenshealthmag.com/style/g60815383/best-white-t-shirts-for-women/"},
+          {"source":"Who What Wear","label":"Best overall · multiple editors","url":"https://www.whowhatwear.com/best-white-t-shirts-for-women-uk"},
+          {"source":"Harper's Bazaar","label":"Editor-reviewed polished basic","url":"https://www.harpersbazaar.com/fashion/trends/g39765610/best-womens-t-shirts/"},
+          {"source":"Glamour UK","label":"Top editor-tested white tee","url":"https://www.glamourmagazine.co.uk/gallery/best-white-tshirt-women"}
         ]
       },
       {
@@ -292,49 +280,34 @@ export const STATIC_EDITS={
         "brand": "Uniqlo",
         "name": "Crew Neck T-Shirt",
         "catalogQuery": "Crew Neck T-Shirt",
+        "channel3Query": "Uniqlo women Crew Neck T-Shirt white",
+        "requiredTitleTerms": ["crew", "neck", "t-shirt"],
+        "excludeTitleTerms": ["dress", "kids", "men", "long-sleeve", "long sleeve"],
+        "canonicalUrl": "https://www.uniqlo.com/us/en/products/E424873-000/00?colorDisplayCode=00",
         "summary": "The value consensus pick: a sturdy mid-weight crewneck editors repurchase because it works alone or under layers.",
         "fitNote": "The fabric is heavier and straighter than many fashion tees; that makes it opaque but less drapey.",
         "evidence": [
-          {
-            "source": "Vogue",
-            "label": "Under-$50 editor must-have",
-            "url": "https://www.vogue.com/article/best-white-t-shirts-for-women"
-          },
-          {
-            "source": "Women's Health",
-            "label": "Best budget · tested",
-            "url": "https://www.womenshealthmag.com/style/g60815383/best-white-t-shirts-for-women/"
-          },
-          {
-            "source": "TODAY",
-            "label": "Editor-loved · top test scores",
-            "url": "https://www.today.com/shop/best-white-t-shirts-rcna240749"
-          },
-          {
-            "source": "W Magazine",
-            "label": "Multiple editor favorite",
-            "url": "https://www.wmagazine.com/fashion/best-white-t-shirts-editor-picks"
-          }
+          {"source":"Vogue","label":"Under-$50 editor must-have","url":"https://www.vogue.com/article/best-white-t-shirts-for-women"},
+          {"source":"Women's Health","label":"Best budget · tested","url":"https://www.womenshealthmag.com/style/g60815383/best-white-t-shirts-for-women/"},
+          {"source":"TODAY","label":"Editor-loved · top test scores","url":"https://www.today.com/shop/best-white-t-shirts-rcna240749"},
+          {"source":"W Magazine","label":"Multiple editor favorite","url":"https://www.wmagazine.com/fashion/best-white-t-shirts-editor-picks"}
         ]
       },
       {
         "rank": 3,
-        "brand": "Leset",
-        "name": "Margo T-Shirt",
-        "catalogQuery": "Margo",
-        "summary": "The polished premium tee for shoppers who want a softer luxury basic rather than the structured high-street options.",
-        "fitNote": "It costs materially more than COS or Uniqlo, so the case rests on cut and fabric preference rather than basic utility.",
+        "brand": "LESET",
+        "name": "The Margo",
+        "catalogQuery": "The Margo",
+        "channel3Query": "LESET The Margo white tee",
+        "requiredTitleTerms": ["margo"],
+        "requiredAnyTerms": ["tee", "t-shirt", "t shirt", "the margo"],
+        "excludeTitleTerms": ["dress", "bebe", "pant", "skirt", "long-sleeve", "long sleeve"],
+        "canonicalUrl": "https://leset.com/products/the-margo-white",
+        "summary": "The polished premium tee for shoppers who want a softer, shape-holding cotton basic rather than the structured high-street options.",
+        "fitNote": "LESET describes it as true to size with a relaxed-but-fitted balance; size up if you want a more effortless, looser fit.",
         "evidence": [
-          {
-            "source": "Vogue",
-            "label": "Editor favorite",
-            "url": "https://www.vogue.com/article/best-white-t-shirts-for-women"
-          },
-          {
-            "source": "Who What Wear",
-            "label": "Best luxury white T-shirt",
-            "url": "https://www.whowhatwear.com/best-white-t-shirts-for-women-uk"
-          }
+          {"source":"Vogue","label":"Editor favorite","url":"https://www.vogue.com/article/best-white-t-shirts-for-women"},
+          {"source":"Who What Wear","label":"Best luxury white T-shirt","url":"https://www.whowhatwear.com/best-white-t-shirts-for-women-uk"}
         ]
       }
     ]
