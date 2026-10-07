@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,adminSyncPrices,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
+import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,adminSyncPrices,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus,rematchCandidates} from "./consensus.js";
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
 import {createPeople,savePersonPicks,peopleStatus,peopleForProduct,peopleSitemap} from "./people.js";
@@ -1000,6 +1000,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/_api/admin/extract"&&request.method==="POST")return extractProducts(request,env);
   if(path==="/_api/admin/candidates"&&request.method==="POST")return saveCandidates(request,env);
   if(path==="/_api/admin/extraction-status"&&request.method==="GET")return extractionStatus(request,env);
+  if(path==="/_api/admin/rematch-candidates"&&request.method==="POST")return rematchCandidates(request,env);
   if(path==="/_api/admin/person-picks"&&request.method==="POST")return savePersonPicks(request,env);
   if(path==="/_api/admin/people-status"&&request.method==="GET")return peopleStatus(request,env);
   if(path==="/_api/admin/sync-prices"&&request.method==="POST")return adminSyncPrices(request,env,enrichStaticPick);
