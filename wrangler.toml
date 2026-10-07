@@ -14,6 +14,10 @@ binding = "DB"
 database_name = "reccas"
 database_id = "f06da302-549f-4059-a8bd-39956188c1d8"
 
+# Set TRENDING to "on" to show the trending section on the homepage; /trending always works for preview.
+[vars]
+TRENDING = "off"
+
 # Cloudflare Email Service, sending from hello@reccas.com.
 [[send_email]]
 name = "EMAIL"

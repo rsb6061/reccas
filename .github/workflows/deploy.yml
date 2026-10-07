@@ -35,3 +35,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx wrangler deploy
+      - name: Smoke test, and roll back if the site is broken
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          sleep 20
+          for path in / /recommendations /most-recommended /best-white-t-shirts-for-women /sitemap.xml; do
+            ok=0
+            for attempt in 1 2 3 4; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "https://reccas.com${path}?smoke=${GITHUB_SHA}")
+              if [ "$code" = "200" ]; then ok=1; break; fi
+              sleep 8
+            done
+            if [ "$ok" != "1" ]; then
+              echo "::error::${path} returned ${code} after deploy; rolling back"
+              npx wrangler rollback --message "Automatic rollback: ${path} returned ${code}" --yes
+              exit 1
+            fi
+          done

@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
+import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
 import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
 const STATIC_COLLECTIONS = {
@@ -567,7 +567,7 @@ async function out(request,env){
     }else if(requestId&&productId){
       await env.DB.prepare("INSERT INTO outbound_clicks(recommendation_id,user_id,clicked_at,destination_url,referrer,request_id) VALUES(?,?,?,?,?,?)").bind(recommendationId||null,who?who.user.id:null,now,to,request.headers.get("referer"),requestId).run();
     }else{
-      await env.DB.prepare("INSERT INTO outbound_clicks(recommendation_id,user_id,clicked_at,destination_url,referrer,request_id) VALUES(NULL,?,?,?,?,?)").bind(who?who.user.id:null,now,to,request.headers.get("referer"),edit||null).run();
+      await env.DB.prepare("INSERT INTO outbound_clicks(recommendation_id,user_id,clicked_at,destination_url,referrer,request_id) VALUES(?,?,?,?,?,?)").bind(u.searchParams.get("product")||null,who?who.user.id:null,now,to,request.headers.get("referer"),edit||null).run();
     }
   }catch(_){}
   return Response.redirect(to,302);
@@ -888,11 +888,11 @@ function machineResource(path){
   return null;
 }
 function faviconResponse(){var raw=atob(FAVICON_B64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Response(bytes,{headers:{"content-type":"image/png","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}})}
-const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick});
+const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
 async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
 const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
-export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
+export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await snapshotProducts(env,r.corpus);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
   var u=new URL(request.url),path=u.pathname.replace(/\/+$/,"")||"/";
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
   if(path==="/health")return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}});
@@ -949,6 +949,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(path==="/most-recommended")return pages.mostRecommended(env);
   if(path==="/search")return pages.search(env,u.searchParams.get("q"),ctx);
   if(path==="/alerts")return pages.alerts(env);
+  if(path==="/trending")return pages.trending(env);
   if(path==="/methodology")return pages.methodology(env);
   if(path==="/sources")return pages.sourcesIndex(env);
   if(path.indexOf("/sources/")===0){var srp=await pages.sourcePage(env,path.slice(9));if(srp)return srp}

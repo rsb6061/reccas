@@ -379,6 +379,46 @@ export async function syncMentions(env) {
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
   return {corpus: corpus, mentions: stmts.length, day: today};
 }
+// One row per product per day. Trending is the difference between two of these rows.
+export async function snapshotProducts(env, corpus) {
+  const today = new Date().toISOString().slice(0, 10), weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS product_daily (day TEXT NOT NULL,product_key TEXT NOT NULL,counted_sources INTEGER NOT NULL,all_sources INTEGER NOT NULL,guides INTEGER NOT NULL,clicks_7d INTEGER NOT NULL DEFAULT 0,alerts INTEGER NOT NULL DEFAULT 0,price REAL,PRIMARY KEY(day,product_key))").run();
+  const clicks = new Map(), alerts = new Map(), prices = new Map();
+  try { ((await env.DB.prepare("SELECT recommendation_id k,COUNT(*) n FROM outbound_clicks WHERE clicked_at>? AND recommendation_id IS NOT NULL GROUP BY recommendation_id").bind(weekAgo).all()).results || []).forEach(function (r) { clicks.set(r.k, r.n); }); } catch (_) {}
+  try { ((await env.DB.prepare("SELECT brand,product_name,COUNT(*) n FROM price_alert_emails WHERE status='active' GROUP BY brand,product_name").all()).results || []).forEach(function (r) { alerts.set(slugify(String(r.brand || "") + " " + String(r.product_name || "")), r.n); }); } catch (_) {}
+  try { ((await env.DB.prepare("SELECT product_key,price FROM price_observations WHERE observed_on=?").bind(today).all()).results || []).forEach(function (r) { prices.set(r.product_key, r.price); }); } catch (_) {}
+  const stmts = corpus.productList.map(function (p) {
+    const all = []; p.evidence.forEach(function (ev) { if (ev.independent && all.indexOf(ev.source) < 0) all.push(ev.source); });
+    return env.DB.prepare("INSERT OR REPLACE INTO product_daily (day,product_key,counted_sources,all_sources,guides,clicks_7d,alerts,price) VALUES (?,?,?,?,?,?,?,?)").bind(today, p.key, p.independent.length, all.length, p.appearances.length, clicks.get(p.key) || 0, alerts.get(p.key) || 0, prices.has(p.key) ? prices.get(p.key) : null);
+  });
+  for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
+  return stmts.length;
+}
+// Compares today's snapshot with the one closest to `days` ago. Empty until two snapshots exist.
+export async function trendingData(env, days) {
+  const out = {gaining: [], clicked: [], onSale: [], since: null, latest: null};
+  try {
+    const dayRows = (await env.DB.prepare("SELECT DISTINCT day FROM product_daily ORDER BY day DESC LIMIT 120").all()).results || [];
+    if (dayRows.length < 2) return out;
+    const latest = dayRows[0].day, target = new Date(Date.now() - (days || 7) * 86400000).toISOString().slice(0, 10);
+    const earlier = (dayRows.find(function (d) { return d.day <= target; }) || dayRows[dayRows.length - 1]).day;
+    if (earlier === latest) return out;
+    out.since = earlier; out.latest = latest;
+    const rows = (await env.DB.prepare("SELECT a.product_key,a.counted_sources now_sources,b.counted_sources then_sources,a.clicks_7d now_clicks,b.clicks_7d then_clicks,a.price now_price,b.price then_price FROM product_daily a JOIN product_daily b ON b.product_key=a.product_key AND b.day=? WHERE a.day=?").bind(earlier, latest).all()).results || [];
+    const corpus = await getCorpus(env);
+    rows.forEach(function (r) {
+      const prod = corpus.products.get(r.product_key);
+      if (!prod) return;
+      if (r.now_sources > r.then_sources) out.gaining.push({prod: prod, from: r.then_sources, to: r.now_sources});
+      if (r.now_clicks >= 5 && r.now_clicks > r.then_clicks) out.clicked.push({prod: prod, from: r.then_clicks, to: r.now_clicks});
+      if (r.now_price != null && r.then_price != null && r.now_price <= r.then_price * 0.9) out.onSale.push({prod: prod, from: r.then_price, to: r.now_price});
+    });
+    out.gaining.sort(function (a, b) { return (b.to - b.from) - (a.to - a.from) || b.to - a.to; });
+    out.clicked.sort(function (a, b) { return (b.to - b.from) - (a.to - a.from); });
+    out.onSale.sort(function (a, b) { return a.to / a.from - b.to / b.from; });
+  } catch (_) {}
+  return out;
+}
 // Only live catalog prices are logged; a price typed into a guide is not a price observation.
 export async function syncPrices(env, corpus, enrichStaticPick) {
   const today = new Date().toISOString().slice(0, 10), stmts = [];
@@ -696,6 +736,7 @@ export function createPages(h) {
     const tiles = corpus.guideList.slice(0, 6).map(guideTile).join("");
     const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Best of Fashion " + FRANCHISE_YEAR + "</span><h1>The women’s fashion products editors agree on most.</h1><p>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s clothing, shoes and bags, matches every mention to an exact product, and shows where independent sources agree. Every count links back to the receipts.</p><div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:24px'><a class='btn' href='" + FRANCHISE_PATH + "'>See Best of Fashion " + FRANCHISE_YEAR + "</a><a class='btn alt' href='/methodology'>How we count</a></div>" + statRow(corpus.stats) + "</section>"
       + "<section class='section'><div class='eyebrow'>Most recommended right now</div><h2>Where independent sources agree</h2><p class='muted'>Products recommended by at least " + AWARD_MIN_SOURCES + " independent sources across everything Reccas tracks. A brand’s own page never counts.</p><div class='rankList'>" + rows + "</div><p style='margin-top:20px'><a class='btn alt' href='/most-recommended'>See the full ranking</a></p></section>"
+      + (await trendingHomeSection(env))
       + "<section class='section'><div class='eyebrow'>Browse Best of Fashion</div><h2>" + a.won.length + " winners across " + corpus.stats.guides + " categories</h2><div class='categoryGrid'>" + categoryCards(corpus) + "</div><div class='guideGrid' style='margin-top:22px'>" + tiles + "</div><p style='margin-top:20px'><a class='btn alt' href='" + FRANCHISE_PATH + "'>See all " + corpus.stats.guides + " categories</a></p></section>"
       + "<section class='section'><div class='eyebrow'>How Reccas works</div><h2>Consensus, not a judging panel.</h2><div class='grid'><div class='card'><h3>Track the recommendations</h3><p>We record named product recommendations from fashion publications, editors, stylists, creators and testers, with a link to each one.</p></div><div class='card'><h3>Match the exact product</h3><p>The same item gets described a dozen ways. Reccas resolves each mention to one product so repeated recommendations count together.</p></div><div class='card'><h3>Count independent agreement</h3><p>Products are ranked by how many independent sources recommend them. Brand and retailer pages are shown as references and never counted.</p></div></div><p style='margin-top:20px'><a class='plainLink' href='/methodology'>Read the full methodology →</a></p></section>"
       + signupBlock("/") + "</main>";
@@ -781,7 +822,7 @@ export function createPages(h) {
     if (pick._static) { try { pick = await h.enrichStaticPick(env, pick); } catch (_) {} }
     const obs = await productObservations(env, key), checks = await mentionChecks(env, "product_key", key);
     const n = prod.independent.length, price = parsePrice(pick.price), priceText = pick.price == null || pick.price === "" ? "" : (typeof pick.price === "number" ? money(pick.price) : String(pick.price));
-    const dest = pick.shopUrl || pick.canonicalUrl || null, tracked = dest ? "/_api/out?edit=" + encodeURIComponent(prod.guideSlug) + "&to=" + encodeURIComponent(dest) : null;
+    const dest = pick.shopUrl || pick.canonicalUrl || null, tracked = dest ? "/_api/out?edit=" + encodeURIComponent(prod.guideSlug) + "&product=" + encodeURIComponent(prod.key) + "&to=" + encodeURIComponent(dest) : null;
     const shopAt = String(pick.shopLabel || pick.brand || "retailer").trim(), rel = pick._affiliate || pick.affiliate === true ? "sponsored noreferrer" : "noreferrer";
     const img = imageUrl(prod.image);
     function evidenceRows(list) {
@@ -831,7 +872,7 @@ export function createPages(h) {
     let lastVerified = "", confirmed = 0, checkable = 0;
     guide.picks.forEach(function (p) { p.evidence.forEach(function (ev) { if (!counts(ev)) return; const c = checks.get(mentionKey(p.key, ev)); if (!c || c.status === "blocked") return; checkable++; if (c.status === "verified" && c.verified_on) { confirmed++; if (c.verified_on > lastVerified) lastVerified = c.verified_on; } }); });
     const cards = picks.map(function (x) {
-      const evidence = x.evidence || [], dest = x.shopUrl || x.canonicalUrl || (evidence[0] && evidence[0].url) || null, track = dest ? "/_api/out?edit=" + encodeURIComponent(slug) + "&to=" + encodeURIComponent(dest) : "#";
+      const evidence = x.evidence || [], dest = x.shopUrl || x.canonicalUrl || (evidence[0] && evidence[0].url) || null, track = dest ? "/_api/out?edit=" + encodeURIComponent(slug) + "&product=" + encodeURIComponent(x.key) + "&to=" + encodeURIComponent(dest) : "#";
       const ev = evidence.map(function (z) { return "<a class='editSource" + (counts(z) ? "" : " isReference") + "' href='" + esc(z.url) + "' target='_blank' rel='noreferrer'><strong>" + esc(z.source) + "</strong> · " + esc(z.disputed ? "No longer listed, not counted" : z.blocked ? "Can’t be re-checked, not counted" : (z.independent ? z.label : "Brand or retailer page")) + " ↗</a>"; }).join("");
       const img = imageUrl({slug: slug, rank: x.rank});
       const visual = "<img src='" + esc(img) + "' alt='" + esc(x.brand + " " + x.name) + "' loading='" + (x.rank === 1 ? "eager" : "lazy") + "'>";
@@ -900,6 +941,30 @@ export function createPages(h) {
     return page("/alerts", "Sale Alerts on the Most Recommended Fashion Products", body, "Get an email when the fashion products editors recommend most go on sale. Reccas checks live prices daily and measures drops against a recorded starting price.", 200, null, {kind: "collection", breadcrumb: "Sale alerts"});
   }
 
+  function trendingRows(t) {
+    return {
+      gaining: t.gaining.slice(0, 8).map(function (g) { return productRow(g.prod, "↑", "Gained " + plural(g.to - g.from, "source") + " (" + g.from + " → " + g.to + ")"); }).join(""),
+      clicked: t.clicked.slice(0, 8).map(function (g) { return productRow(g.prod, "↑", "Shopped " + g.to + " times this week, up from " + g.from); }).join(""),
+      onSale: t.onSale.slice(0, 8).map(function (g) { return productRow(g.prod, "↓", money(g.to) + ", down " + Math.round((1 - g.to / g.from) * 100) + "% from " + money(g.from)); }).join("")
+    };
+  }
+  async function trending(env) {
+    const t = await trendingData(env, 7), rows = trendingRows(t), any = rows.gaining || rows.clicked || rows.onSale;
+    const section = function (eyebrow, title, html, empty) { return "<section class='section'><div class='eyebrow'>" + eyebrow + "</div><h2>" + title + "</h2>" + (html ? "<div class='rankList'>" + html + "</div>" : "<p class='muted'>" + empty + "</p>") + "</section>"; };
+    const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>What’s moving</span><h1>Trending in women’s fashion recommendations</h1><p>" + (t.since ? "Changes between " + esc(niceDate(t.since)) + " and " + esc(niceDate(t.latest)) + ", from Reccas’s daily record of who recommends what." : "Reccas records every product’s sources, price and shopper interest once a day. Trends appear here once there are two days to compare.") + "</p></section>"
+      + section("Gaining support", "More independent sources than a week ago", rows.gaining, "No product has gained a source in this period.")
+      + section("On sale", "Dropped 10% or more", rows.onSale, "No tracked product has dropped 10% or more in this period.")
+      + section("Most shopped", "Rising shopper interest", rows.clicked, "Not enough shopping activity to compare yet.")
+      + "</main>";
+    return page("/trending", "Trending Fashion Recommendations This Week", body, "The women’s fashion products gaining independent recommendations, dropping in price or rising in shopper interest this week.", 200, any && h.trendingOn && h.trendingOn(env) ? null : "noindex, follow", {kind: "collection", breadcrumb: "Trending"});
+  }
+  async function trendingHomeSection(env) {
+    if (!(h.trendingOn && h.trendingOn(env))) return "";
+    const t = await trendingData(env, 7), rows = trendingRows(t);
+    if (t.gaining.length + t.onSale.length < 4) return "";
+    return "<section class='section'><div class='eyebrow'>What’s moving</div><h2>Trending this week</h2><div class='rankList'>" + t.gaining.slice(0, 4).map(function (g) { return productRow(g.prod, "↑", "Gained " + plural(g.to - g.from, "source")); }).join("") + t.onSale.slice(0, 2).map(function (g) { return productRow(g.prod, "↓", money(g.to) + ", down " + Math.round((1 - g.to / g.from) * 100) + "%"); }).join("") + "</div><p style='margin-top:20px'><a class='btn alt' href='/trending'>See everything that moved</a></p></section>";
+  }
+
   async function sitemapEntries(env) {
     const corpus = await getCorpus(env), day = today(), out = [];
     ["/", FRANCHISE_PATH, "/most-recommended", "/alerts", "/sources", "/methodology", "/about", "/press", "/developers", "/privacy"].forEach(function (p) { out.push({p: p, last: day}); });
@@ -910,5 +975,5 @@ export function createPages(h) {
     return out;
   }
 
-  return {home: home, recommendations: recommendations, categoryPage: categoryPage, mostRecommended: mostRecommended, sourcesIndex: sourcesIndex, sourcePage: sourcePage, productPage: productPage, methodology: methodology, guidePage: guidePage, search: search, alerts: alerts, sitemapEntries: sitemapEntries};
+  return {home: home, recommendations: recommendations, categoryPage: categoryPage, mostRecommended: mostRecommended, sourcesIndex: sourcesIndex, sourcePage: sourcePage, productPage: productPage, methodology: methodology, guidePage: guidePage, search: search, alerts: alerts, trending: trending, sitemapEntries: sitemapEntries};
 }
