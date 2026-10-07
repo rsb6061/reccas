@@ -435,17 +435,63 @@ async function requestPage(env,slug){
 }
 function catalogNeedle(v){
   var stop=new Set(["the","for","women","womens","woman","regular","classic","in","and","with","of"]);
-  return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(/\s+/).filter(function(x){return x.length>2&&!stop.has(x)}).slice(0,3);
+  return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(/\s+/).filter(function(x){return x.length>2&&!stop.has(x)}).slice(0,4);
+}
+function productMatchText(v){return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim()}
+function productTitleMatches(title,pick){
+  var t=productMatchText(title),required=pick.requiredTitleTerms||[],any=pick.requiredAnyTerms||[],excluded=pick.excludeTitleTerms||[];
+  if(required.some(function(term){return t.indexOf(productMatchText(term))<0}))return false;
+  if(any.length&&!any.some(function(term){return t.indexOf(productMatchText(term))>=0}))return false;
+  if(excluded.some(function(term){return t.indexOf(productMatchText(term))>=0}))return false;
+  return true;
+}
+function channel3BrandName(pr){return pr&&pr.brands&&pr.brands[0]&&pr.brands[0].name||""}
+function channel3Image(pr){
+  var imgs=pr&&pr.images||[];
+  for(var i=0;i<imgs.length;i++){var v=typeof imgs[i]==="string"?imgs[i]:(imgs[i]&&imgs[i].url||imgs[i]&&imgs[i].src);if(v)return v}
+  return null;
+}
+function channel3BestOffer(pr){
+  var offers=(pr&&pr.offers||[]).filter(function(o){return o&&o.url});
+  offers.sort(function(a,b){var ac=Number(a.max_commission_rate||0),bc=Number(b.max_commission_rate||0);if((bc>0)!=(ac>0))return bc>0?-1:1;if(bc!==ac)return bc-ac;var ap=a.price&&Number(a.price.price),bp=b.price&&Number(b.price.price);return (isFinite(ap)?ap:1e12)-(isFinite(bp)?bp:1e12)});
+  return offers[0]||null;
+}
+async function channel3StaticPick(env,pick){
+  if(!env.CHANNEL3_API_KEY)return null;
+  try{
+    var q=String(pick.channel3Query||((pick.brand||"")+" "+(pick.name||""))).trim();
+    if(!q)return null;
+    var r=await fetch("https://api.trychannel3.com/v1/search",{method:"POST",headers:{"x-api-key":env.CHANNEL3_API_KEY,"content-type":"application/json"},body:JSON.stringify({query:q,limit:20})});
+    if(!r.ok)return null;
+    var d=await r.json(),ps=d.products||[],wantBrand=productMatchText(pick.brand),best=null,bestScore=-1;
+    for(var i=0;i<ps.length;i++){
+      var pr=ps[i],brand=productMatchText(channel3BrandName(pr)),title=String(pr.title||"");
+      if(wantBrand&&brand&&brand!==wantBrand&&brand.indexOf(wantBrand)<0&&wantBrand.indexOf(brand)<0)continue;
+      if(!productTitleMatches(title,pick))continue;
+      var gender=String(pr.gender||"").toLowerCase();if(gender&&gender!=="female"&&gender!=="women"&&gender!=="unisex")continue;
+      var cats=[pr.category&&pr.category.slug].concat((pr.category&&pr.category.path||[]).map(function(z){return z&&z.slug})).filter(Boolean).map(function(z){return String(z).toLowerCase()});
+      if(cats.some(function(c){return c==="dresses"||c==="dress"}))continue;
+      var score=0;if(brand===wantBrand)score+=20;else if(brand&&wantBrand)score+=10;
+      var tn=productMatchText(title),need=catalogNeedle(pick.catalogQuery||pick.name);need.forEach(function(t){if(tn.indexOf(t)>=0)score+=3});
+      if(channel3Image(pr))score+=2;if(channel3BestOffer(pr))score+=2;
+      if(score>bestScore){best=pr;bestScore=score}
+    }
+    if(!best)return null;
+    var offer=channel3BestOffer(best),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
+    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:true,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0});
+    return out;
+  }catch(_){return null}
 }
 async function enrichStaticPick(env,pick){
+  var viaChannel3=await channel3StaticPick(env,pick);if(viaChannel3)return viaChannel3;
   var x=Object.assign({},pick),tokens=catalogNeedle(x.catalogQuery||x.name),pattern="%"+tokens.join("%")+"%",brand="%"+String(x.brand||"").toLowerCase().replace(/[^a-z0-9]+/g,"%")+"%";
-  if(!tokens.length)return x;
-  var base="SELECT p.id,p.title,p.price,p.image_url,p.canonical_url,b.name brand_name,(SELECT po.affiliate_url FROM product_offers po WHERE po.product_id=p.id AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL ORDER BY po.commission_rate DESC LIMIT 1) affiliate_url FROM products p LEFT JOIN brands b ON b.id=p.brand_id WHERE p.is_product_page_live=1 AND lower(p.title) LIKE ?";
-  var row=null;
-  try{row=await env.DB.prepare(base+" AND lower(COALESCE(b.name,'')) LIKE ? ORDER BY p.updated_at DESC LIMIT 1").bind(pattern,brand).first()}catch(_){}
-  if(!row){try{row=await env.DB.prepare(base+" ORDER BY p.updated_at DESC LIMIT 1").bind(pattern).first()}catch(_){}}
-  if(row){x.productId=row.id;x.price=row.price==null?x.price:Number(row.price);x.imageUrl=row.image_url||x.imageUrl;x.shopUrl=row.affiliate_url||row.canonical_url||x.shopUrl;x._catalog=true}
-  return x;
+  if(tokens.length){
+    var base="SELECT p.id,p.title,p.price,p.image_url,p.canonical_url,b.name brand_name,(SELECT po.affiliate_url FROM product_offers po WHERE po.product_id=p.id AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL ORDER BY po.commission_rate DESC LIMIT 1) affiliate_url FROM products p LEFT JOIN brands b ON b.id=p.brand_id WHERE p.is_product_page_live=1 AND lower(p.title) LIKE ? AND lower(COALESCE(b.name,'')) LIKE ?";
+    var row=null;try{row=await env.DB.prepare(base+" ORDER BY p.updated_at DESC LIMIT 8").bind(pattern,brand).all()}catch(_){}
+    var candidates=row&&row.results||[],match=candidates.find(function(r){return productTitleMatches(r.title,x)});
+    if(match){x.productId=match.id;x.price=match.price==null?x.fallbackPrice:Number(match.price);x.imageUrl=match.image_url||x.imageUrl;x.shopUrl=match.affiliate_url||match.canonical_url||x.canonicalUrl||null;x._catalog=true;x._channel3=false;x._affiliate=!!match.affiliate_url;return x}
+  }
+  x.price=x.price==null?x.fallbackPrice:x.price;x.shopUrl=x.shopUrl||x.canonicalUrl||null;x._catalog=!!x.shopUrl;x._channel3=false;x._affiliate=false;return x;
 }
 async function sourced(env,slug){
   var row=await env.DB.prepare("SELECT json FROM sourced_shopping_edits WHERE slug=? LIMIT 1").bind(slug).first(),isStatic=false,e;
@@ -465,8 +511,11 @@ async function sourced(env,slug){
     var img=isStatic?(x.imageUrl||null):"/_api/edit-image?slug="+encodeURIComponent(slug)+"&rank="+encodeURIComponent(x.rank);
     var visual=img?"<img src='"+esc(img)+"' alt='"+esc(x.brand+" "+x.name)+"' loading='"+(x.rank===1?"eager":"lazy")+"'>":"<div class='editVisualFallback'>"+esc(x.brand+" "+x.name)+"</div>";
     var price=x.price==null||x.price===""?"":(typeof x.price==="number"?money(x.price):String(x.price));
-    var action=x._catalog?"Shop"+(price?" "+esc(price):""):"View source",live=x._catalog?"Matched to a live product":"Editorially recommended";
-    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+visual+"</div><div class='editCopy'><div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div>"+(price?"<span class='editPrice'>"+esc(price)+"</span>":"")+"</div><div class='editLive'>"+esc(live)+" · "+esc(evidence.length)+" recommendation source"+(evidence.length===1?"":"s")+"</div><p class='editSummary'>"+esc(x.summary||"")+"</p><div class='editSources'>"+ev+"</div><p class='editNote'><strong>Worth knowing:</strong> "+esc(x.fitNote||"Check current sizing, materials and availability before buying.")+"</p><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='sponsored noreferrer'>"+action+"</a>":"")+"</div></div></article>";
+    var action=dest?"Shop"+(price?" "+esc(price):""):"View source";
+    var live=x._channel3?(x._affiliate?"Channel3 product · affiliate link":"Channel3 product · no affiliate link"):(x._catalog?(x._affiliate?"Live product · affiliate link":"Live product · no affiliate link"):"Editorially recommended");
+    var commerceNote=x._catalog&&!x._affiliate?"<span class='muted' style='font-size:12px'>No affiliate link available; this goes directly to the product.</span>":"";
+    var rel=x._affiliate?"sponsored noreferrer":"noreferrer";
+    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+visual+"</div><div class='editCopy'><div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div>"+(price?"<span class='editPrice'>"+esc(price)+"</span>":"")+"</div><div class='editLive'>"+esc(live)+" · "+esc(evidence.length)+" recommendation source"+(evidence.length===1?"":"s")+"</div><p class='editSummary'>"+esc(x.summary||"")+"</p><div class='editSources'>"+ev+"</div><p class='editNote'><strong>Worth knowing:</strong> "+esc(x.fitNote||"Check current sizing, materials and availability before buying.")+"</p><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='"+rel+"'>"+action+"</a>":"")+commerceNote+"</div></div></article>";
   }).join("");
   var metrics="<div class='editMetrics'><span><strong>"+esc(e.picks.length)+"</strong> focused picks</span><span><strong>"+esc(totalSources)+"</strong> sourced mentions</span><span><strong>"+esc(e.checkedLabel||"Sep 2026")+"</strong> last checked</span></div>";
   var headline=multiSource>=Math.ceil(e.picks.length/2)?"Consensus, with receipts.":"Editor-backed, with receipts.";
