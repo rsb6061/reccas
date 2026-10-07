@@ -240,6 +240,25 @@ async function searchChannel3(env,q){
   var j=await r.json();return Array.isArray(j.products)?j.products:[];
 }
 
+export async function refillCatalogIntent(env,intent){
+  var query=String(intent&&intent.query||"").trim(),category=String(intent&&intent.category||"").trim(),terms=Array.isArray(intent&&intent.terms)?intent.terms:[];
+  if(!query||!category)return{query:query,category:category,added:0,updated:0,skipped:0,brandsAdded:0,brandsReactivated:0,errors:1,lastError:"Invalid intent"};
+  var brands=await knownBrands(env),info={brands:await tableInfo(env,"brands"),products:await tableInfo(env,"products"),offers:await tableInfo(env,"product_offers")};
+  if(!info.brands.length||!info.products.length||!info.offers.length)throw new Error("Catalog schema unavailable");
+  var products=await searchChannel3(env,query),brandsAdded=0,brandsReactivated=0,added=0,updated=0,skipped=0,errors=0,lastError=null;
+  for(var j=0;j<products.length;j++){
+    try{
+      var approval=await ensureApprovedBrand(env,products[j],brands,info.brands);
+      if(approval.kind==="added")brandsAdded++;
+      else if(approval.kind==="reactivated")brandsReactivated++;
+      if(!approval.brand){skipped++;continue}
+      var result=await upsertOne(env,products[j],[query,category,terms.length?terms:[category]],brands,info);
+      if(result==="added")added++;else if(result==="updated")updated++;else skipped++;
+    }catch(e){errors++;lastError=String(e&&e.message||e).slice(0,500)}
+  }
+  return{query:query,category:category,brandsAdded:brandsAdded,brandsReactivated:brandsReactivated,added:added,updated:updated,skipped:skipped,errors:errors,lastError:lastError};
+}
+
 export async function catalogExpansionStatus(env){
   var run=await ensureState(env),counts={};
   try{
