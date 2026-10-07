@@ -273,6 +273,26 @@ async function loadExtras(env) {
       });
     });
   } catch (_) {}
+  // Consensus discovered on a canonical guide should also strengthen relevant derived guides.
+  // Example: a newly-qualified loafer can support "comfortable loafers" or "loafers for work"
+  // when that derived guide is explicitly built from the canonical loafer source family.
+  Object.keys(DERIVED_GUIDES).forEach(function (slug) {
+    const cfg = DERIVED_GUIDES[slug] || {}, dest = out.promoted.get(slug) || [];
+    const seen = new Set(dest.map(function (p) { return compact(p.brand) + "|" + compact(p.name); }));
+    (cfg.sourceSlugs || []).forEach(function (sourceSlug) {
+      const canonicalSource = GUIDE_REDIRECTS[sourceSlug] || sourceSlug;
+      const source = out.promoted.get(canonicalSource) || [];
+      source.forEach(function (raw) {
+        const hay = (String(raw.brand || "") + " " + String(raw.name || "")).toLowerCase();
+        if (Array.isArray(cfg.include) && cfg.include.length && !cfg.include.some(function (needle) { return hay.indexOf(String(needle).toLowerCase()) >= 0; })) return;
+        const key = compact(raw.brand) + "|" + compact(raw.name);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        dest.push(Object.assign({}, raw, {summary: raw.summary || "Added by rule from the source recommendation family."}));
+      });
+    });
+    if (dest.length) out.promoted.set(slug, dest);
+  });
   return out;
 }
 // Retailers and editors describe the same item's fabric differently, so fabric words do not decide a catalog match.
