@@ -80,7 +80,7 @@ export async function confirmSignup(env, info) {
   return sendEmail(env, {
     to: info.email, kind: "list_confirm", ref: "newsletter",
     subject: "You are on the Reccas list",
-    html: "<p style=\"font-size:18px\">You are on the Reccas list.</p><p>Reccas tracks what fashion editors, stylists, creators and testers recommend and counts where independent sources agree. You will hear from us when a widely recommended product goes on sale, and when Best of Fashion changes: new winners, products gaining support and ones that have been dropped. It will be occasional.</p><p><a href=\"" + SITE + "/recommendations\" style=\"color:#4255ff\">See Best of Fashion</a></p>",
+    html: "<p style=\"font-size:18px\">You are on the Reccas list.</p><p>Reccas tracks what fashion editors, stylists, creators and testers recommend and counts where independent sources agree. You will hear from us when a widely recommended product goes on sale, and when Best of Fashion changes: products gaining support and ones that have been dropped. It will be occasional.</p><p><a href=\"" + SITE + "/recommendations\" style=\"color:#4255ff\">See Best of Fashion</a></p>",
     text: "You are on the Reccas list. You will hear from us when a widely recommended product goes on sale, and when Best of Fashion changes.\n" + SITE + "/recommendations"
   });
 }

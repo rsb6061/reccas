@@ -10,19 +10,19 @@ function productSummary(p) {
   return {product: p.brand + " " + p.name, brand: p.brand, name: p.name, independent_sources: p.independent.length, tested_by: p.tested.length, sources: p.independent, categories: p.appearances.map(function (a) { return a.title; }), url: SITE + "/products/" + p.key};
 }
 function guideSummary(g) {
-  const lead = g.picks[0], won = !!(lead && lead.independent.length >= AWARD_MIN_SOURCES);
-  return {category: g.title, type: g.type, url: SITE + "/" + g.slug, independent_sources: g.independentSources.length, winner: won ? lead.brand + " " + lead.name : null, leader: lead ? lead.brand + " " + lead.name : null, leader_sources: lead ? lead.independent.length : 0};
+  const lead = g.picks[0];
+  return {category: g.title, type: g.type, url: SITE + "/" + g.slug, independent_sources: g.independentSources.length, most_recommended: lead ? lead.brand + " " + lead.name : null, most_recommended_sources: lead ? lead.independent.length : 0};
 }
 function clamp(v, lo, hi, dflt) { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : dflt; }
 
 export const AGENT_TOOLS = [
   {name: "get_most_recommended", title: "Most recommended fashion products", description: "Women's fashion products ranked by how many independent editors, stylists and testers recommend them. Optionally narrow to a product type (for example sneakers or jeans) or a broad category. Use for questions like 'what is the most recommended white sneaker' or 'which jeans do editors agree on'.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS, description: "Product type"}, category: {type: "string", enum: Object.keys(CATEGORIES)}, query: {type: "string", description: "Optional words to match, such as 'white' or 'under 200'"}, limit: {type: "integer", minimum: 1, maximum: 25}}, additionalProperties: false}},
   {name: "search_recommendations", title: "Search Reccas", description: "Search the products, categories and sources Reccas tracks by brand, product name, product type or publication.", inputSchema: {type: "object", properties: {query: {type: "string"}, limit: {type: "integer", minimum: 1, maximum: 20}}, required: ["query"], additionalProperties: false}},
-  {name: "get_category", title: "Best of Fashion category", description: "The ranked products for one Best of Fashion category, such as 'best white t-shirts for women', with the winner if one has at least three independent sources and the sources behind every product.", inputSchema: {type: "object", properties: {category: {type: "string", description: "Category name, slug or search words"}}, required: ["category"], additionalProperties: false}},
+  {name: "get_category", title: "Best of Fashion category", description: "The ranked products for one Best of Fashion category, such as 'best white t-shirts for women', ordered by how many independent sources recommend each, with the sources behind every product. Reccas does not name winners.", inputSchema: {type: "object", properties: {category: {type: "string", description: "Category name, slug or search words"}}, required: ["category"], additionalProperties: false}},
   {name: "get_product_recommendations", title: "Who recommends a product", description: "Every source that recommends a specific product: publication, writer where known, how they described it, when the source was last updated, and a link to the original. Use for 'who recommends X' or 'is X still recommended'.", inputSchema: {type: "object", properties: {product: {type: "string", description: "Brand and product name"}}, required: ["product"], additionalProperties: false}},
   {name: "get_source_recommendations", title: "What a source recommends", description: "The products a given publication or creator recommends in the categories Reccas tracks, with links to the original articles.", inputSchema: {type: "object", properties: {source: {type: "string", description: "Publication or creator name, for example Vogue"}}, required: ["source"], additionalProperties: false}},
   {name: "get_most_recommended_brands", title: "Most recommended brands", description: "Women's fashion brands ranked by how many independent sources recommend at least one of their products, optionally within one product type such as jeans or sneakers.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}, limit: {type: "integer", minimum: 1, maximum: 30}}, additionalProperties: false}},
-  {name: "list_categories", title: "List Best of Fashion categories", description: "All Best of Fashion " + FRANCHISE_YEAR + " categories with their current winner or leader.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}}, additionalProperties: false}}
+  {name: "list_categories", title: "List Best of Fashion categories", description: "All Best of Fashion " + FRANCHISE_YEAR + " categories with the product most sources recommend in each.", inputSchema: {type: "object", properties: {type: {type: "string", enum: TYPE_KEYS}}, additionalProperties: false}}
 ];
 
 export async function agentCall(name, a, env) {
@@ -53,10 +53,10 @@ export async function agentCall(name, a, env) {
     const q = String(a.category || ""), hit = queryMatcher(q);
     const guide = corpus.guides.get(slugify(q)) || corpus.guideList.find(function (g) { return slugify(g.title) === slugify(q); }) || corpus.guideList.find(function (g) { return hit(g.title + " " + g.slug); });
     if (!guide) return {error: "No category matches that.", categories: corpus.guideList.slice(0, 40).map(function (g) { return g.title; })};
-    const lead = guide.picks[0], won = !!(lead && lead.independent.length >= AWARD_MIN_SOURCES);
+    const lead = guide.picks[0];
     return {
-      category: guide.title, url: SITE + "/" + guide.slug, winner: won ? lead.brand + " " + lead.name : null,
-      status: won ? "Winner named: at least " + AWARD_MIN_SOURCES + " independent sources agree." : "Not yet awarded: no product has " + AWARD_MIN_SOURCES + " independent sources.",
+      category: guide.title, url: SITE + "/" + guide.slug, most_recommended: lead ? lead.brand + " " + lead.name : null, most_recommended_sources: lead ? lead.independent.length : 0,
+      agreement: lead && lead.independent.length >= 3 ? "Several independent sources agree on the leading product." : "Little agreement: no product here has three independent sources.",
       products: guide.picks.map(function (p) { return {rank: p.rank, product: p.brand + " " + p.name, independent_sources: p.independent.length, sources: p.independent, summary: [p.summary, p.fitNote].filter(Boolean).join(" "), url: SITE + "/products/" + p.key}; }),
       methodology: SITE + "/methodology", note: NOTE
     };
