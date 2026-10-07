@@ -690,6 +690,17 @@ export function signupPopup(path) {
   return "<div class='popCard js-pop' role='dialog' aria-label='Sale alerts' hidden><button class='popClose js-pop-close' type='button' aria-label='Close'>×</button><span class='eyebrow'>Sale alerts</span><h3>Know when the most recommended pieces go on sale.</h3><p class='muted'>Reccas tracks prices on the products fashion editors agree on. Leave your email and we will tell you when one drops.</p><form class='js-pop-form'><input class='hp' type='text' name='website' tabindex='-1' autocomplete='off' aria-hidden='true'><input class='field' type='email' name='email' required autocomplete='email' placeholder='Email address' aria-label='Email address'><button class='btn' type='submit'>Get sale alerts</button></form><div class='signupMsg js-pop-msg' role='status'></div></div><script>(function(){var c=document.querySelector('.js-pop');if(!c)return;var K='reccas_popup';function seen(){try{return !!localStorage.getItem(K)}catch(_){return true}}function mark(v){try{localStorage.setItem(K,v)}catch(_){}}if(seen())return;var shown=false;function show(){if(shown||seen())return;shown=true;c.hidden=false;requestAnimationFrame(function(){c.classList.add('open')})}function hide(v){mark(v);c.classList.remove('open');setTimeout(function(){c.hidden=true},250)}var t=setTimeout(show,12000);window.addEventListener('scroll',function(){var d=document.documentElement;if((window.scrollY+window.innerHeight)/d.scrollHeight>0.5){clearTimeout(t);show()}},{passive:true});c.querySelector('.js-pop-close').onclick=function(){hide('dismissed')};var f=c.querySelector('.js-pop-form'),m=c.querySelector('.js-pop-msg');f.addEventListener('submit',async function(e){e.preventDefault();var o=Object.fromEntries(new FormData(f).entries());m.textContent='Saving…';try{var r=await fetch('/_api/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:o.email,website:o.website,kind:'newsletter',page:location.pathname+'#popup'})}),j={};try{j=await r.json()}catch(_){}if(!r.ok){m.textContent=j.error||'Could not save that. Please try again.';return}m.textContent='You are on the list.';mark('subscribed');setTimeout(function(){hide('subscribed')},1600)}catch(_){m.textContent='Could not save that. Please try again.'}})})();</script>";
 }
 
+const SYNONYMS = {tee: ["t-shirt"], tees: ["t-shirt"], tshirt: ["t-shirt"], tshirts: ["t-shirt"], trainer: ["sneaker"], trainers: ["sneaker"], pants: ["trouser", "pant"], trousers: ["trouser", "pant"], purse: ["bag"], handbag: ["bag"], jumper: ["sweater"], jumpers: ["sweater"], denim: ["jean"], pumps: ["heel", "flat"], coat: ["coat", "trench"], shirt: ["shirt", "button-down"]};
+const QUERY_FILLER = new Set(["best", "the", "most", "recommended", "top", "for", "women", "womens", "a", "an", "of", "in", "good", "which", "what", "is", "are"]);
+// Returns a test for whether a piece of text matches every meaningful word of a query, allowing plurals and synonyms.
+export function queryMatcher(query) {
+  let tokens = slugify(query).split("-").filter(Boolean);
+  const meaningful = tokens.filter(function (t) { return !QUERY_FILLER.has(t); });
+  if (meaningful.length) tokens = meaningful;
+  const variants = tokens.map(function (tok) { return [tok, tok.replace(/(es|s)$/, "")].concat(SYNONYMS[tok] || []).filter(function (v) { return v.length > 1; }); }).filter(function (vs) { return vs.length > 0; });
+  return function (text) { const t = slugify(text); return variants.length > 0 && variants.every(function (vs) { return vs.some(function (v) { return t.indexOf(v) >= 0; }); }); };
+}
+
 export function createPages(h) {
   const esc = h.esc, money = h.money, page = h.page;
   const today = function () { return new Date().toISOString().slice(0, 10); };
@@ -901,9 +912,7 @@ export function createPages(h) {
 
   async function search(env, rawQuery, ctx) {
     const q = String(rawQuery || "").trim().slice(0, 80), tokens = slugify(q).split("-").filter(Boolean), corpus = await getCorpus(env);
-    const SYNONYMS = {tee: ["t-shirt"], tees: ["t-shirt"], tshirt: ["t-shirt"], tshirts: ["t-shirt"], trainer: ["sneaker"], trainers: ["sneaker"], pants: ["trouser", "pant"], trousers: ["trouser", "pant"], purse: ["bag"], handbag: ["bag"], jumper: ["sweater"], jumpers: ["sweater"], denim: ["jean"], pumps: ["heel", "flat"], coat: ["coat", "trench"], shirt: ["shirt", "button-down"]};
-    const variants = tokens.map(function (tok) { return [tok, tok.replace(/(es|s)$/, "")].concat(SYNONYMS[tok] || []).filter(function (v) { return v.length > 1; }); });
-    function hit(text) { const t = slugify(text); return variants.every(function (vs) { return vs.some(function (v) { return t.indexOf(v) >= 0; }); }); }
+    const hit = queryMatcher(q);
     let products = [], guides = [], sources = [];
     if (tokens.length) {
       products = corpus.productList.filter(function (p) { return hit(p.brand + " " + p.name + " " + p.appearances.map(function (a) { return a.title; }).join(" ")); }).slice(0, 24);
