@@ -52,3 +52,20 @@ jobs:
           curl -fsS -X POST "https://reccas.com/_api/admin/rematch-candidates" \
             -H "x-verify-key: $VERIFY_KEY" \
             -H "content-type: application/json"
+      - name: Report recommendation coverage after rematch
+        run: |
+          body=$(curl -fsS "https://reccas.com/_api/recommendation-coverage?after-rematch=${GITHUB_SHA}")
+          echo "$body" > /tmp/coverage.json
+          node - <<'NODE'
+          const fs=require("fs");
+          const x=JSON.parse(fs.readFileSync("/tmp/coverage.json","utf8"));
+          console.log("POST_REMATCH_COVERAGE "+JSON.stringify({
+            guideCount:x.guideCount,
+            thinCatalogCount:x.thinCatalogCount,
+            thinEvidenceCount:x.thinEvidenceCount,
+            strongGuideCount:x.strongGuideCount
+          }));
+          console.log("WORST_EVIDENCE "+JSON.stringify((x.rows||[]).slice().sort((a,b)=>a.evidenceProducts-b.evidenceProducts||a.strongProducts-b.strongProducts).slice(0,20).map(r=>({
+            slug:r.slug,evidenceProducts:r.evidenceProducts,strongProducts:r.strongProducts,independentSources:r.independentSources
+          }))));
+          NODE
