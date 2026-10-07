@@ -137,7 +137,10 @@ h3{font-size:23px;line-height:1.1;letter-spacing:-.025em}
 .editCopy h2{font-size:34px;line-height:1.02;margin:0}
 .editPrice{font-size:15px;white-space:nowrap;color:#514b65}
 .editLive{font-size:12px;color:var(--green);margin-top:12px}
-.editSummary{font-size:15px;line-height:1.6;color:#514b65;margin:20px 0 14px}
+.editConsensus{margin-top:14px;padding:10px 0 2px;display:flex;flex-direction:column;gap:3px}
+.editConsensus strong{font-size:14px;color:var(--ink)}
+.editConsensusSources{font-size:12px;line-height:1.45;color:var(--muted)}
+.editSummary{font-size:15px;line-height:1.6;color:#514b65;margin:14px 0 14px}
 .editSources{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px}
 .editActions{margin-top:auto;display:flex;align-items:center;gap:12px}
 .editMethod{margin-top:36px;padding:28px;border:1px solid var(--lavender);background:rgba(255,255,255,.7);border-radius:24px}
@@ -541,9 +544,19 @@ async function sourced(env,slug){
     var commerceNote=x._catalog&&!x._affiliate?"<span class='muted' style='font-size:12px'>No affiliate link available; this goes directly to the product.</span>":"";
     var rel=x._affiliate?"sponsored noreferrer":"noreferrer";
     var description=[x.summary,x.fitNote].filter(Boolean).join(" ");
-    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+visual+"</div><div class='editCopy'>"+watchButton+"<div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div></div><p class='editSummary'>"+esc(description||"")+"</p><div class='editSources'>"+ev+"</div><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='"+rel+"'>"+action+"</a>":"")+commerceNote+"</div></div></article>";
+    var sourceNames=[],typed={editor:0,stylist:0,creator:0,tester:0};
+    evidence.forEach(function(z){
+      var nm=String(z.source||"").trim();if(nm&&sourceNames.indexOf(nm)<0)sourceNames.push(nm);
+      var typ=String(z.sourceType||z.recommenderType||z.type||"").toLowerCase();
+      if(typed[typ]!=null)typed[typ]++;
+    });
+    var typedParts=Object.keys(typed).filter(function(k){return typed[k]>0}).map(function(k){return typed[k]+" "+k+(typed[k]===1?"":"s")});
+    var sourceLine=sourceNames.slice(0,4).map(esc).join(" · ")+(sourceNames.length>4?" · +"+(sourceNames.length-4)+" more":"");
+    if(typedParts.length)sourceLine+=(sourceLine?" · ":"")+typedParts.map(esc).join(" · ");
+    var consensus="<div class='editConsensus'><strong>"+esc(evidence.length)+" recommendation"+(evidence.length===1?"":"s")+"</strong>"+(sourceLine?"<div class='editConsensusSources'>"+sourceLine+"</div>":"")+"</div>";
+    return "<article class='editPick' id='pick-"+esc(x.rank)+"'><div class='editVisual'><span class='editRank'>#"+esc(x.rank)+"</span>"+visual+"</div><div class='editCopy'>"+watchButton+"<div class='editTop'><div><p class='editBrand'>"+esc(x.brand)+"</p><h2>"+esc(x.name)+"</h2></div></div>"+consensus+"<p class='editSummary'>"+esc(description||"")+"</p><div class='editSources'>"+ev+"</div><div class='editActions'>"+(dest?"<a class='btn' href='"+track+"' target='_blank' rel='"+rel+"'>"+action+"</a>":"")+commerceNote+"</div></div></article>";
   }).join("");
-  var metrics="<div class='editMetrics'><span><strong>"+esc(e.picks.length)+"</strong> focused picks</span><span><strong>"+esc(totalSources)+"</strong> sourced mentions</span><span><strong>"+esc(e.checkedLabel||"Sep 2026")+"</strong> last checked</span></div>";
+  var metrics="<div class='editMetrics'><span><strong>"+esc(e.picks.length)+"</strong> focused picks</span><span><strong>"+esc(totalSources)+"</strong> recommendations</span><span><strong>"+esc(e.checkedLabel||"Sep 2026")+"</strong> last checked</span></div>";
   var headline=multiSource>=Math.ceil(e.picks.length/2)?"Consensus, with receipts.":"Editor-backed, with receipts.";
   var intro="<section class='editIntro'><div><span class='eyebrow'>Why this is different</span><h2>"+headline+"</h2></div><p>Every recommendation links back to the editor, tester or publication that made it. Reccas narrows the evidence to a small number of useful picks, then checks the actual shopping constraint and flags the caveats.</p></section>";
   var method="<section class='editMethod'><span class='eyebrow'>How Reccas built this guide</span><h2>What counts as a recommendation?</h2><p>"+esc(e.freshnessCopy||"The product must still satisfy the stated category, price, or use-case constraint when Reccas checks it.")+" Reccas may earn a commission from some shopping links.</p></section>";
