@@ -47,3 +47,8 @@ jobs:
         env:
           LIMIT: ${{ inputs.limit || '200' }}
         run: node scripts/extract-recommendations.mjs
+      - name: Rematch extracted recommendations to known products
+        run: |
+          curl -fsS -X POST "https://reccas.com/_api/admin/rematch-candidates" \
+            -H "x-verify-key: $VERIFY_KEY" \
+            -H "content-type: application/json"
