@@ -3,7 +3,7 @@ import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
-import {catalogExpansionTick,catalogExpansionStatus} from "./catalog-expansion.js";
+import {catalogExpansionTick,catalogExpansionStatus,refillCatalogIntent} from "./catalog-expansion.js";
 const STATIC_COLLECTIONS = {
   "/what-to-wear-by-temperature":["What to Wear by Temperature","Practical outfit ideas organized by temperature and weather."],
   "/capsule-wardrobes":["Capsule Wardrobes","Seasonal capsules built around complete, repeatable outfits."],
@@ -892,6 +892,51 @@ function machineResource(path){
 function faviconResponse(){var raw=atob(FAVICON_B64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Response(bytes,{headers:{"content-type":"image/png","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}})}
 const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
+
+function coverageIntentFromGuide(g){
+  var t=String(g&&g.title||g&&g.slug||"").toLowerCase(),slug=String(g&&g.slug||"");
+  function has(rx){return rx.test(t+" "+slug)}
+  var category="top",terms=[];
+  if(has(/loafer|ballet flat|\bflat\b/)){category="flat";terms=["loafer","flat","ballet","mary jane"]}
+  else if(has(/sneaker|trainer/)){category="shoe";terms=["sneaker","trainer"]}
+  else if(has(/ankle boot|knee.high boot|\bboots?\b/)){category="boot";terms=["boot","chelsea","knee","ankle"]}
+  else if(has(/heel|pump|slingback/)){category="heel";terms=["heel","pump","slingback","sandal"]}
+  else if(has(/crossbody|handbag|shoulder bag|tote|work bag/)){category="bag";terms=["bag","tote","crossbody","shoulder","handbag"]}
+  else if(has(/jean|denim/)){category="jean";terms=["jean","denim"]}
+  else if(has(/trouser|work pant|wide.leg pant|travel pant|wrinkle.resistant pant|\bpants?\b/)){category="pant";terms=["pant","trouser"]}
+  else if(has(/cashmere|merino|cardigan|sweater|knit/)){category="knit";terms=["sweater","cardigan","cashmere","merino","knit"]}
+  else if(has(/trench|wool coat|\bcoat\b/)){category="coat";terms=["coat","trench"]}
+  else if(has(/blazer|packable jacket|puffer|\bjacket\b/)){category="jacket";terms=["jacket","blazer","puffer","shell"]}
+  else if(has(/wedding guest dress|cocktail dress|midi dress|work dress|little black dress|\bdress/)){category="dress";terms=["dress","gown"]}
+  else if(has(/midi skirt|slip skirt|\bskirt/)){category="skirt";terms=["skirt"]}
+  else if(has(/legging/)){category="activewear";terms=["legging","tight"]}
+  else if(has(/\bbra\b|underwear|panty|brief|thong/)){category="intimates";terms=["bra","bralette","brief","thong","underwear","panty"]}
+  else if(has(/button.down|t.shirt|\btop\b|blouse|shirt/)){category="top";terms=["shirt","tee","t-shirt","blouse","top"]}
+  var query=t.replace(/^the\s+/,"").replace(/^best\s+/,"").replace(/,.*$/,"").replace(/\s+/g," ").trim();
+  if(query.indexOf("women")<0&&query.indexOf("womens")<0)query="women "+query;
+  return{query:query,category:category,terms:terms};
+}
+async function recommendationCoverageAudit(env,doRefill){
+  var guides=await guideIndex(env),rows=[],thin=[];
+  for(var i=0;i<guides.length;i++){
+    var g=guides[i],full=await getGuide(env,g.slug),intent=coverageIntentFromGuide(g),params=[intent.category],where="p.canonical_category=?";
+    var token=(intent.terms||[]).filter(Boolean);
+    if(token.length){where+=" AND ("+token.map(function(){return"lower(p.title) LIKE ?"}).join(" OR ")+")";params=params.concat(token.map(function(x){return"%"+String(x).toLowerCase()+"%"}))}
+    var st=env.DB.prepare("SELECT COUNT(DISTINCT p.id) n FROM products p JOIN product_offers po ON po.product_id=p.id WHERE p.is_product_page_live=1 AND po.source='channel3' AND po.commission_rate>0 AND po.affiliate_url IS NOT NULL AND "+where);
+    st=st.bind.apply(st,params);var rr=await st.first(),catalogCount=Number(rr&&rr.n||0);
+    var evidenceProducts=full&&Array.isArray(full.picks)?full.picks.length:0,strongProducts=full&&Array.isArray(full.picks)?full.picks.filter(function(p){return Array.isArray(p.independent)&&p.independent.length>=3}).length:0;
+    var row={slug:g.slug,title:g.title,catalogProducts:catalogCount,evidenceProducts:evidenceProducts,strongProducts:strongProducts,independentSources:full&&full.independentSources?full.independentSources.length:Number(g.sources||0),thinCatalog:catalogCount<8,thinEvidence:evidenceProducts<5||strongProducts<3,intent:intent};
+    rows.push(row);if(row.thinCatalog)thin.push(row);
+  }
+  var refill=[];
+  if(doRefill){
+    for(var j=0;j<thin.length;j++){
+      var x=thin[j],r=await refillCatalogIntent(env,x.intent);refill.push(Object.assign({slug:x.slug,before:x.catalogProducts},r));
+    }
+  }
+  rows.sort(function(a,b){return a.catalogProducts-b.catalogProducts||a.evidenceProducts-b.evidenceProducts||a.slug.localeCompare(b.slug)});
+  return{guideCount:rows.length,thinCatalogCount:rows.filter(function(x){return x.thinCatalog}).length,thinEvidenceCount:rows.filter(function(x){return x.thinEvidence}).length,rows:rows,refill:refill};
+}
 async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
 const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
 export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{await catalogExpansionTick(env,8);var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await snapshotProducts(env,r.corpus);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
@@ -899,6 +944,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
   if(path==="/health"){if(u.searchParams.get("expand")==="targeted-fashion-v2-brands-2026-10-07")return Response.json(await catalogExpansionTick(env,6),{headers:{"Cache-Control":"no-store"}});ctx.waitUntil(catalogExpansionTick(env,6).catch(function(){}));return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}})};
   if(path==="/_api/catalog-expansion/status"&&request.method==="GET")return Response.json(await catalogExpansionStatus(env),{headers:{"Cache-Control":"no-store"}});
+  if(path==="/_api/recommendation-coverage"&&request.method==="GET"){var refill=u.searchParams.get("refill")==="1";return Response.json(await recommendationCoverageAudit(env,refill),{headers:{"Cache-Control":"no-store"}});}
   if(path==="/robots.txt")return new Response("User-agent: *\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: OAI-SearchBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: GPTBot\nAllow: /\nAllow: /_api/edit-image\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\nDisallow: /_api/\n\nUser-agent: ChatGPT-User\nAllow: /\nDisallow: /login\nDisallow: /signup\nDisallow: /wardrobe\nDisallow: /admin/\n\nSitemap: https://reccas.com/sitemap.xml\n",{headers:{"content-type":"text/plain; charset=utf-8","cache-control":"public, max-age=3600"}});
   if(path==="/sitemap.xml"||path==="/_api/sitemap")return sitemap(env);
   var machine=machineResource(path);if(machine)return machine;
