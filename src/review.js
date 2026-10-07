@@ -46,5 +46,29 @@ export function createReview(h) {
     return page("/admin/review", "Recommendation review", body, "Admin review.", 200, "noindex, nofollow");
   }
 
-  return {reviewPage: reviewPage, setStatus: setStatus};
+  // One private screen of the numbers that show whether anyone is using the site.
+  async function metricsPage(request, env) {
+    const gate = await h.requireAdmin(request, env);
+    if (gate) return gate.status === 401 ? Response.redirect("https://reccas.com/login?returnTo=%2Fadmin%2Fmetrics", 302) : page("/admin/metrics", "Admin access required", "<main class='wrap'><section class='hero'><h1>Admin access required</h1></section></main>", "Admin", 403, "noindex, nofollow");
+    const now = Date.now(), wk = new Date(now - 7 * 86400000).toISOString(), prev = new Date(now - 14 * 86400000).toISOString();
+    async function rows(sql) { try { const st = env.DB.prepare(sql), args = [].slice.call(arguments, 1); return ((args.length ? await st.bind.apply(st, args).all() : await st.all()).results) || []; } catch (_) { return []; } }
+    async function pair(table, col, where) { const a = await rows("SELECT COUNT(*) n FROM " + table + " WHERE " + col + ">?" + (where ? " AND " + where : ""), wk), b = await rows("SELECT COUNT(*) n FROM " + table + " WHERE " + col + ">? AND " + col + "<=?" + (where ? " AND " + where : ""), prev, wk); return {now: a[0] ? a[0].n : 0, before: b[0] ? b[0].n : 0}; }
+    const corpus = await getCorpus(env);
+    const signups = await pair("emails", "created_at", "source IN ('newsletter','popup')"), alerts = await pair("price_alert_emails", "created_at"), ai = await pair("ai_referrals", "observed_at"), searches = await pair("search_queries", "created_at"), clicks = await pair("outbound_clicks", "clicked_at", "recommendation_id IS NOT NULL"), sent = await pair("email_log", "created_at", "ok=1");
+    const aiBy = await rows("SELECT source,COUNT(*) n FROM ai_referrals WHERE observed_at>? GROUP BY source ORDER BY n DESC", wk);
+    const topSearch = await rows("SELECT q,COUNT(*) n,MAX(products+guides+sources) found FROM search_queries WHERE created_at>? GROUP BY q ORDER BY n DESC LIMIT 15", wk);
+    const topClicks = await rows("SELECT recommendation_id k,COUNT(*) n FROM outbound_clicks WHERE clicked_at>? AND recommendation_id IS NOT NULL GROUP BY recommendation_id ORDER BY n DESC LIMIT 10", wk);
+    const checks = await rows("SELECT status,COUNT(*) n FROM mention_checks GROUP BY status");
+    const priced = await rows("SELECT COUNT(DISTINCT product_key) n FROM price_observations WHERE observed_on>?", new Date(now - 2 * 86400000).toISOString().slice(0, 10));
+    const tile = function (label, v) { return "<span><strong>" + v.now + "</strong>" + esc(label) + "<br><small>" + v.before + " the week before</small></span>"; };
+    const table = function (head, list, fn) { return list.length ? "<div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr>" + head.map(function (x) { return "<th>" + esc(x) + "</th>"; }).join("") + "</tr></thead><tbody>" + list.map(fn).join("") + "</tbody></table></div>" : "<p class='muted'>Nothing recorded yet.</p>"; };
+    const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Admin</span><h1>This week in numbers</h1><p>The last 7 days against the 7 before. Shop clicks count only people: visits from crawlers are not recorded, and counting began when the filter was added on 2026-10-07.</p><div class='statRow'>" + tile("email signups", signups) + tile("sale alerts set", alerts) + tile("shop clicks by people", clicks) + tile("visits from AI assistants", ai) + tile("site searches", searches) + tile("emails sent", sent) + "</div></section>"
+      + "<section class='section'><h2>Visits from AI assistants</h2>" + table(["Assistant", "Visits"], aiBy, function (r) { return "<tr><td>" + esc(r.source) + "</td><td>" + r.n + "</td></tr>"; }) + "</section>"
+      + "<section class='section'><h2>What people searched for</h2>" + table(["Search", "Times", "Found anything"], topSearch, function (r) { return "<tr><td>" + esc(r.q) + "</td><td>" + r.n + "</td><td>" + (r.found ? "Yes" : "No") + "</td></tr>"; }) + "</section>"
+      + "<section class='section'><h2>Most shopped products</h2>" + table(["Product", "Clicks"], topClicks, function (r) { const p = corpus.products.get(r.k); return "<tr><td>" + (p ? "<a class='plainLink' href='/products/" + esc(p.key) + "'>" + esc(p.brand + " " + p.name) + "</a>" : esc(r.k)) + "</td><td>" + r.n + "</td></tr>"; }) + "</section>"
+      + "<section class='section'><h2>The dataset</h2><div class='statRow'><span><strong>" + corpus.stats.mentions + "</strong>counted recommendations</span><span><strong>" + corpus.stats.products + "</strong>products</span><span><strong>" + corpus.stats.sources + "</strong>sources</span><span><strong>" + corpus.stats.guides + "</strong>published categories</span><span><strong>" + (priced[0] ? priced[0].n : 0) + "</strong>products priced in the last 2 days</span><span><strong>" + (corpus.anchored || 0) + "</strong>products tied to a catalog record</span>" + checks.map(function (c) { return "<span><strong>" + c.n + "</strong>source checks: " + esc(c.status.replace("_", " ")) + "</span>"; }).join("") + "</div><p style='margin-top:20px'><a class='plainLink' href='/admin/review'>Recommendation review log →</a></p></section></main>";
+    return page("/admin/metrics", "This week in numbers", body, "Admin metrics.", 200, "noindex, nofollow");
+  }
+
+  return {reviewPage: reviewPage, setStatus: setStatus, metricsPage: metricsPage};
 }

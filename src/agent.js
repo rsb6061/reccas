@@ -7,7 +7,7 @@ const NOTE = "Counts are the number of different independent sources tracked by 
 const TYPE_KEYS = TYPES.map(function (t) { return t.key; });
 
 function productSummary(p) {
-  return {product: p.brand + " " + p.name, brand: p.brand, name: p.name, independent_sources: p.independent.length, sources: p.independent, categories: p.appearances.map(function (a) { return a.title; }), url: SITE + "/products/" + p.key};
+  return {product: p.brand + " " + p.name, brand: p.brand, name: p.name, independent_sources: p.independent.length, tested_by: p.tested.length, sources: p.independent, categories: p.appearances.map(function (a) { return a.title; }), url: SITE + "/products/" + p.key};
 }
 function guideSummary(g) {
   const lead = g.picks[0], won = !!(lead && lead.independent.length >= AWARD_MIN_SOURCES);

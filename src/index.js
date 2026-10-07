@@ -486,6 +486,8 @@ function channel3BestOffer(pr,pick){
   return sort(offers)[0]||null;
 }
 function c3CompareAt(offer){var p=offer&&offer.price||{},v=p.compare_at_price!=null?p.compare_at_price:p.compare_at!=null?p.compare_at:p.original_price!=null?p.original_price:p.list_price;v=Number(v);return isFinite(v)&&v>0?v:null}
+// Uses the stored catalog record when there is one, so a page never re-guesses which item a product is.
+async function resolvePick(env,pick){var a=pick&&pick._anchor;if(a&&a.url)return Object.assign({},pick,{sourceProductId:a.catalog_id,productId:null,imageUrl:pick.preferStaticImage&&pick.imageUrl?pick.imageUrl:(a.image_url||pick.imageUrl||null),price:a.price!=null?a.price:pick.fallbackPrice,shopUrl:a.url,_catalog:true,_channel3:true,_affiliate:!!a.affiliate,compareAt:a.compare_at,_anchored:true});if(pick&&pick._promoted)return Object.assign({},pick,{price:pick.fallbackPrice,shopUrl:null,_catalog:false,_channel3:false,_affiliate:false});return enrichStaticPick(env,pick)}
 async function channel3StaticPick(env,pick){
   if(!env.CHANNEL3_API_KEY)return null;
   try{
@@ -506,10 +508,11 @@ async function channel3StaticPick(env,pick){
       if(channel3Image(pr))score+=2;if(channel3BestOffer(pr,pick))score+=2;
       if(score>bestScore){best=pr;bestScore=score}
     }
+    if(pick._anchor&&pick._anchor.catalog_id){var same=ps.find(function(z){return String(z.id)===String(pick._anchor.catalog_id)});if(!same)return null;best=same}
     if(!best)return null;
     var offer=pick.skipChannel3Offer?null:channel3BestOffer(best,pick),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
     var exactImg=pick.preferStaticImage&&pick.imageUrl?pick.imageUrl:null;
-    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:exactImg||img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:!pick.skipChannel3Offer,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0,compareAt:c3CompareAt(offer),_priceKeys:offer&&offer.price?Object.keys(offer.price):[]});
+    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:exactImg||img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:!pick.skipChannel3Offer,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0,_title:String(best.title||""),_brand:channel3BrandName(best),compareAt:c3CompareAt(offer),_priceKeys:offer&&offer.price?Object.keys(offer.price):[]});
     return out;
   }catch(_){return null}
 }
@@ -529,7 +532,7 @@ async function editImage(request,env){
   var e=await getGuide(env,slug);
   if(!e)return new Response("Not found",{status:404});
   var pick=(e.picks||[]).find(function(x){return Number(x.rank)===rank});if(!pick)return new Response("Not found",{status:404});
-  if(pick._static)pick=await enrichStaticPick(env,pick);
+  if(pick._static)pick=await resolvePick(env,pick);
   var srcUrl=pick.imageUrl;
   if(!srcUrl||!/^https:\/\//i.test(srcUrl)){
     var fallback="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><rect width='800' height='800' fill='%23f4f1ec'/><text x='50%' y='48%' dominant-baseline='middle' text-anchor='middle' fill='%2377717b' font-family='Arial,sans-serif' font-size='28'>"+esc(pick.brand||"Reccas")+"</text><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' fill='%23272733' font-family='Arial,sans-serif' font-size='34' font-weight='600'>"+esc(pick.name||"Recommendation")+"</text></svg>";
@@ -560,9 +563,12 @@ async function sitemap(env){
   var xml="<?xml version='1.0' encoding='UTF-8'?><urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"+entries.map(function(e){return "<url><loc>https://reccas.com"+esc(e.p)+"</loc>"+(e.last?"<lastmod>"+esc(String(e.last).slice(0,10))+"</lastmod>":"")+"</url>"}).join("")+"</urlset>";
   return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"public,max-age=3600"}});
 }
+// A person clicking a link on the site sends browser navigation headers that crawlers following links do not.
+function looksHuman(request){var ua=String(request.headers.get("user-agent")||"");if(!ua||/bot|crawl|spider|slurp|preview|headless|python|curl|wget|scrapy|httpclient|go-http|java\/|okhttp|gpt|claude|perplexity|ahrefs|semrush|bytespider|facebookexternalhit|monitor|lighthouse/i.test(ua))return false;if(request.cf&&request.cf.verifiedBotCategory)return false;var site=String(request.headers.get("sec-fetch-site")||""),mode=String(request.headers.get("sec-fetch-mode")||"");return site==="same-origin"&&mode==="navigate"}
 async function out(request,env){
   var u=new URL(request.url),to=u.searchParams.get("to");if(!to||!/^https?:\/\//i.test(to))return new Response("Invalid destination",{status:400});
   var requestId=u.searchParams.get("requestId"),outfitId=u.searchParams.get("outfitId"),productId=u.searchParams.get("productId"),recommendationId=u.searchParams.get("recommendationId"),edit=u.searchParams.get("edit"),who=await sessionUser(request,env),now=new Date().toISOString();
+  if(!looksHuman(request))return new Response(null,{status:302,headers:{Location:to,"X-Robots-Tag":"noindex, nofollow"}});
   try{
     if(requestId&&outfitId&&productId){
       var outfit=await env.DB.prepare("SELECT name FROM outfit_groups WHERE id=? AND request_id=? LIMIT 1").bind(Number(outfitId),requestId).first();
@@ -892,7 +898,7 @@ function machineResource(path){
   return null;
 }
 function faviconResponse(){var raw=atob(FAVICON_B64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Response(bytes,{headers:{"content-type":"image/png","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}})}
-const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichStaticPick,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
+const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:resolvePick,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
 const peoplePages=createPeople({page:page,esc:esc});
 
@@ -998,6 +1004,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/_api/admin/sync-prices"&&request.method==="POST")return adminSyncPrices(request,env,enrichStaticPick);
   if(path==="/_api/admin/mention-status"&&request.method==="POST")return review.setStatus(request,env);
   if(path==="/admin/review")return review.reviewPage(request,env);
+  if(path==="/admin/metrics")return review.metricsPage(request,env);
   if(path==="/unsubscribe"&&(request.method==="GET"||request.method==="POST"))return unsubscribePage(request,env);
   if(path==="/")return pages.home(env);
   if(path==="/guides")return guides(env);

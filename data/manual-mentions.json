@@ -1,0 +1,20 @@
+{
+  "_about": "Recommendations recorded by a person reading the article, for publications that should not be read automatically (for example Wirecutter). Each entry is a fact with a link: who, which product, how they described it, and whether they tested it. Entries are applied by the same rules as everything else.",
+  "_example": {
+    "guide": "best-white-t-shirts-for-women",
+    "source": "Wirecutter",
+    "url": "https://www.nytimes.com/wirecutter/reviews/example/",
+    "author": "",
+    "modified_at": "2026-09-01",
+    "basis": "tested",
+    "products": [
+      {
+        "brand": "Example Brand",
+        "name": "Example Tee",
+        "label": "Top pick",
+        "price": 30
+      }
+    ]
+  },
+  "entries": []
+}
