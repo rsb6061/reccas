@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
+import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,adminSyncPrices,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
@@ -484,6 +484,7 @@ function channel3BestOffer(pr,pick){
   if(pick&&pick.fallbackPrice!=null){var target=Number(pick.fallbackPrice),reasonable=offers.filter(function(o){var p=o.price&&Number(o.price.price);return isFinite(p)&&p>=target*.65&&p<=target*1.45});if(reasonable.length)return sort(reasonable)[0]}
   return sort(offers)[0]||null;
 }
+function c3CompareAt(offer){var p=offer&&offer.price||{},v=p.compare_at_price!=null?p.compare_at_price:p.compare_at!=null?p.compare_at:p.original_price!=null?p.original_price:p.list_price;v=Number(v);return isFinite(v)&&v>0?v:null}
 async function channel3StaticPick(env,pick){
   if(!env.CHANNEL3_API_KEY)return null;
   try{
@@ -507,7 +508,7 @@ async function channel3StaticPick(env,pick){
     if(!best)return null;
     var offer=pick.skipChannel3Offer?null:channel3BestOffer(best,pick),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
     var exactImg=pick.preferStaticImage&&pick.imageUrl?pick.imageUrl:null;
-    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:exactImg||img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:!pick.skipChannel3Offer,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0});
+    var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:exactImg||img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:!pick.skipChannel3Offer,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0,compareAt:c3CompareAt(offer),_priceKeys:offer&&offer.price?Object.keys(offer.price):[]});
     return out;
   }catch(_){return null}
 }
@@ -894,7 +895,7 @@ const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichSt
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
 async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
 const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
-export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{await catalogExpansionTick(env,8);var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await snapshotProducts(env,r.corpus);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
+export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){var first=event.cron==="17 9 * * *",last=event.cron==="17 17 * * *";try{if(first)await catalogExpansionTick(env,8)}catch(_){}try{var r=await syncMentions(env);if(first)await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick,first?36:44);await snapshotProducts(env,r.corpus);if(last){await sendPriceDropAlerts(env);await sendSaleDigest(env)}}catch(_){}})())},async fetch(request,env,ctx){
   var u=new URL(request.url),path=u.pathname.replace(/\/+$/,"")||"/";
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
   if(path==="/health"){if(u.searchParams.get("expand")==="targeted-fashion-v2-brands-2026-10-07")return Response.json(await catalogExpansionTick(env,6),{headers:{"Cache-Control":"no-store"}});ctx.waitUntil(catalogExpansionTick(env,6).catch(function(){}));return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}})};
@@ -944,6 +945,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){t
   if(path==="/_api/admin/extract"&&request.method==="POST")return extractProducts(request,env);
   if(path==="/_api/admin/candidates"&&request.method==="POST")return saveCandidates(request,env);
   if(path==="/_api/admin/extraction-status"&&request.method==="GET")return extractionStatus(request,env);
+  if(path==="/_api/admin/sync-prices"&&request.method==="POST")return adminSyncPrices(request,env,enrichStaticPick);
   if(path==="/_api/admin/mention-status"&&request.method==="POST")return review.setStatus(request,env);
   if(path==="/admin/review")return review.reviewPage(request,env);
   if(path==="/unsubscribe"&&(request.method==="GET"||request.method==="POST"))return unsubscribePage(request,env);

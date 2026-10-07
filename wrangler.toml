@@ -23,4 +23,4 @@ TRENDING = "off"
 name = "EMAIL"
 
 [triggers]
-crons = ["17 9 * * *"]
+crons = ["17 9 * * *", "17 13 * * *", "17 17 * * *"]

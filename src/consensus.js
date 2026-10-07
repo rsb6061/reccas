@@ -202,7 +202,7 @@ async function loadExtras(env) {
   out.promoted = new Map();
   out.brandRows = [];
   try {
-    const rows = (await env.DB.prepare("SELECT c.brand,c.name,c.product_key,c.source,c.label,c.url,c.author,c.published_at,c.modified_at,c.price,c.status,COALESCE(c.guide_slug,(SELECT o.guide_slug FROM mention_observations o WHERE o.url=c.url AND o.guide_slug IS NOT NULL LIMIT 1)) guide FROM mention_candidates c WHERE c.validated=1 AND c.status IN ('accepted','new_product')").all()).results || [];
+    const rows = (await env.DB.prepare("SELECT c.brand,c.name,c.product_key,c.source,c.label,c.url,c.author,c.published_at,c.modified_at,c.price,c.status,c.extracted_on,COALESCE(c.guide_slug,(SELECT o.guide_slug FROM mention_observations o WHERE o.url=c.url AND o.guide_slug IS NOT NULL LIMIT 1)) guide FROM mention_candidates c WHERE c.validated=1 AND c.status IN ('accepted','new_product')").all()).results || [];
     const clusters = new Map();
     rows.forEach(function (r) {
       const guide = r.guide ? (GUIDE_REDIRECTS[r.guide] || r.guide) : null;
@@ -214,7 +214,7 @@ async function loadExtras(env) {
       let c = list.find(function (x) { return x.key === r.product_key || sameProductName(x.name, r.name); });
       if (!c) { c = {guide: guide, brand: r.brand, name: r.name, key: r.product_key, names: {}, evidence: [], prices: []}; list.push(c); }
       c.names[r.name] = (c.names[r.name] || 0) + 1;
-      c.evidence.push({source: r.source, label: r.label || "Recommended in this article", url: r.url, author: r.author || null, date: r.modified_at || r.published_at || null});
+      c.evidence.push({source: r.source, label: r.label || "Recommended in this article", url: r.url, author: r.author || null, date: r.modified_at || r.published_at || null, readOn: r.extracted_on});
       if (r.price != null && Number(r.price) > 0) c.prices.push(Number(r.price));
     });
     clusters.forEach(function (list) {
@@ -224,9 +224,13 @@ async function loadExtras(env) {
         if (independent.length < PROMOTE_MIN_SOURCES) return;
         const cap = (c.guide.match(/under-(\d+)/) || [])[1], price = c.prices.length ? Math.min.apply(null, c.prices) : null;
         if (cap && (price == null || price > Number(cap))) return;
+        // The day the product qualified is the day the source that took it to the threshold was read.
+        const reached = [], seenSrc = [];
+        c.evidence.slice().sort(function (a, b) { return String(a.readOn).localeCompare(String(b.readOn)); }).forEach(function (ev) { const n = sourceName(ev.source); if (isIndependent(ev, {brand: c.brand}) && seenSrc.indexOf(n) < 0) { seenSrc.push(n); reached.push(ev.readOn); } });
+        const promotedOn = reached[PROMOTE_MIN_SOURCES - 1] || null;
         c.name = Object.keys(c.names).sort(function (a, b) { return c.names[b] - c.names[a] || a.length - b.length; })[0];
         if (!out.promoted.has(c.guide)) out.promoted.set(c.guide, []);
-        out.promoted.get(c.guide).push({brand: c.brand, name: c.name, evidence: c.evidence, fallbackPrice: price, summary: "Added by rule: " + independent.length + " independent sources name it in their guides to this category.", _promoted: true});
+        out.promoted.get(c.guide).push({brand: c.brand, name: c.name, evidence: c.evidence, fallbackPrice: price, summary: "Added by rule: " + independent.length + " independent sources name it in their guides to this category.", _promoted: true, promotedOn: promotedOn});
       });
     });
   } catch (_) {}
@@ -484,17 +488,48 @@ export async function trendingData(env, days) {
   return out;
 }
 // Only live catalog prices are logged; a price typed into a guide is not a price observation.
-export async function syncPrices(env, corpus, enrichStaticPick) {
-  const today = new Date().toISOString().slice(0, 10), stmts = [];
-  for (const prod of corpus.productList) {
-    if (!prod.pick._static) continue;
+export async function syncPrices(env, corpus, enrichStaticPick, limit) {
+  const today = new Date().toISOString().slice(0, 10), stmts = [], seenKeys = {};
+  await ensureObservationTables(env);
+  const cols = ((await env.DB.prepare("PRAGMA table_info(price_observations)").all()).results || []).map(function (c) { return c.name; });
+  if (cols.indexOf("compare_at") < 0) await env.DB.prepare("ALTER TABLE price_observations ADD COLUMN compare_at REAL").run();
+  const lastSeen = new Map();
+  ((await env.DB.prepare("SELECT product_key,MAX(observed_on) d FROM price_observations GROUP BY product_key").all()).results || []).forEach(function (r) { lastSeen.set(r.product_key, r.d); });
+  // Each catalog lookup is an outbound request and a run only gets so many, so the least recently priced go first.
+  const queue = corpus.productList.filter(function (p) { return p.pick._static && lastSeen.get(p.key) !== today; }).sort(function (a, b) { return String(lastSeen.get(a.key) || "").localeCompare(String(lastSeen.get(b.key) || "")); }).slice(0, limit || 36);
+  for (const prod of queue) {
     try {
       const live = await enrichStaticPick(env, prod.pick), price = parsePrice(live && live.price);
-      if (live && live._channel3 && price != null) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO price_observations (product_key,observed_on,price,currency,merchant) VALUES (?,?,?,?,?)").bind(prod.key, today, price, "USD", host(live.shopUrl) || null));
+      (live && live._priceKeys || []).forEach(function (k) { seenKeys[k] = true; });
+      const was = live && live.compareAt != null && price != null && live.compareAt > price ? live.compareAt : null;
+      if (live && live._channel3 && price != null) stmts.push(env.DB.prepare("INSERT OR REPLACE INTO price_observations (product_key,observed_on,price,currency,merchant,compare_at) VALUES (?,?,?,?,?,?)").bind(prod.key, today, price, "USD", host(live.shopUrl) || null, was));
     } catch (_) {}
   }
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
-  return stmts.length;
+  return {saved: stmts.length, tried: queue.length, remaining: corpus.productList.filter(function (p) { return p.pick._static && lastSeen.get(p.key) !== today; }).length - queue.length, priceFields: Object.keys(seenKeys)};
+}
+export async function adminSyncPrices(request, env, enrichStaticPick) {
+  if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
+  const corpus = await getCorpus(env), r = await syncPrices(env, corpus, enrichStaticPick, 44);
+  await snapshotProducts(env, corpus);
+  return Response.json(Object.assign({ok: true}, r));
+}
+// Products selling below the retailer's own "was" price, or 10% or more below the first price Reccas recorded.
+export async function saleItems(env, corpus) {
+  const out = [];
+  try {
+    const rows = (await env.DB.prepare("SELECT product_key,observed_on,price,compare_at FROM price_observations ORDER BY observed_on ASC").all()).results || [], first = new Map(), last = new Map();
+    rows.forEach(function (r) { if (!first.has(r.product_key)) first.set(r.product_key, r); last.set(r.product_key, r); });
+    const stale = new Date(Date.now() - 4 * 86400000).toISOString().slice(0, 10);
+    last.forEach(function (now, key) {
+      const prod = corpus.products.get(key), base = first.get(key), price = Number(now.price);
+      if (!prod || !(price > 0) || now.observed_on < stale) return;
+      const was = now.compare_at != null && Number(now.compare_at) > price ? Number(now.compare_at) : (base && Number(base.price) > price ? Number(base.price) : null);
+      if (was && price <= was * 0.9) out.push({prod: prod, now: price, was: was, off: Math.round((1 - price / was) * 100), listed: now.compare_at != null});
+    });
+    out.sort(function (a, b) { return b.prod.independent.length - a.prod.independent.length || b.off - a.off; });
+  } catch (_) {}
+  return out;
 }
 let lastMentionSyncDay = "";
 export async function syncMentionsOncePerDay(env) {
@@ -750,6 +785,18 @@ export const CONSENSUS_CSS = `
 .searchForm{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px;max-width:620px}
 .searchForm .field{flex:1;min-width:220px}
 @media(max-width:760px){.navRight{margin-left:auto;gap:4px;position:static}.nav{position:relative}.navAlerts span{display:none}.navAlerts{padding:9px 11px}.navSearch.open{position:absolute;left:8px;right:8px;top:8px;bottom:8px;background:#fff;border-radius:999px;z-index:5}.navSearch.open input{flex:1;width:auto}}
+.cardRow{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-top:18px}
+.pCard{display:flex;flex-direction:column;border:1px solid var(--lavender);border-radius:22px;background:rgba(255,255,255,.86);overflow:hidden;color:inherit;text-decoration:none;position:relative;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+.pCard:hover{transform:translateY(-3px);border-color:#aa98ef;box-shadow:0 16px 36px rgba(41,32,89,.095)}
+.pCard img{width:100%;aspect-ratio:1/1;object-fit:cover;background:#f4f1ec}
+.pCardBody{padding:14px 16px 16px;display:flex;flex-direction:column;gap:4px;flex:1}
+.pCardBrand{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pCard h3{font-size:19px;line-height:1.15;margin:0}
+.pCardMeta{font-size:12px;color:var(--muted);margin-top:auto;padding-top:8px}
+.pCardPrice{font-size:15px;color:var(--ink)}
+.pCardPrice s{color:var(--muted);font-size:13px;margin-left:5px}
+.pBadge{position:absolute;top:10px;left:10px;background:var(--ink);color:#fff;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:600;letter-spacing:.03em}
+.pBadge.isNew{background:var(--green)}
 .footNote{font-size:12px;line-height:1.55;color:var(--muted);max-width:760px;margin:0}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 @media(max-width:720px){.rankRow{grid-template-columns:30px 60px 1fr;gap:12px}.rankRow img{width:60px;height:60px}.rankCount{grid-column:2/4;text-align:left}.rankCount strong{display:inline;font-size:20px;margin-right:5px}.productHero{grid-template-columns:1fr}}
@@ -811,15 +858,39 @@ export function createPages(h) {
     return {won: won, pending: pending};
   }
 
+  function productCard(prod, opts) {
+    opts = opts || {};
+    const n = prod.independent.length;
+    return "<a class='pCard' href='/products/" + esc(prod.key) + "'>" + (opts.badge ? "<span class='pBadge" + (opts.badgeClass ? " " + opts.badgeClass : "") + "'>" + esc(opts.badge) + "</span>" : "") + "<img src='" + esc(imageUrl(prod.image)) + "' alt='" + esc(prod.brand + " " + prod.name) + "' loading='lazy'><div class='pCardBody'><span class='pCardBrand'>" + esc(prod.brand) + "</span><h3>" + esc(prod.name) + "</h3>" + (opts.priceHtml || "") + "<span class='pCardMeta'>" + plural(n, "independent source") + "</span></div></a>";
+  }
+  function typeCards(corpus) {
+    return corpus.types.filter(function (t) { return t.key !== "more"; }).map(function (t) {
+      const lead = t.guides.map(function (g) { return g.picks[0] ? {g: g, p: g.picks[0]} : null; }).filter(Boolean).sort(function (x, y) { return y.p.independent.length - x.p.independent.length; })[0];
+      if (!lead) return "";
+      const href = t.guides.length === 1 ? "/" + t.guides[0].slug : FRANCHISE_PATH + "#" + t.key;
+      return "<a class='pCard' href='" + esc(href) + "'><img src='" + esc(imageUrl({slug: lead.g.slug, rank: lead.p.rank})) + "' alt='" + esc(t.label) + "' loading='lazy'><div class='pCardBody'><h3>" + esc(t.label) + "</h3><span class='pCardMeta'>" + esc(lead.p.brand + " " + lead.p.name) + " leads · " + plural(lead.p.independent.length, "source") + "</span></div></a>";
+    }).join("");
+  }
+  function saleCards(items, max) {
+    return items.slice(0, max).map(function (d) { return productCard(d.prod, {badge: "−" + d.off + "%", priceHtml: "<span class='pCardPrice'>" + esc(money(d.now)) + "<s>" + esc(money(d.was)) + "</s></span>"}); }).join("");
+  }
+  function justListed(corpus) {
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    return corpus.productList.filter(function (p) { return p.pick._promoted && p.pick.promotedOn && p.pick.promotedOn >= cutoff; }).sort(function (a, b) { return String(b.pick.promotedOn).localeCompare(String(a.pick.promotedOn)) || b.independent.length - a.independent.length; });
+  }
+
   async function home(env) {
-    const corpus = await getCorpus(env), a = awards(corpus);
+    const corpus = await getCorpus(env), a = awards(corpus), onSale = await saleItems(env, corpus), fresh = justListed(corpus);
     const top = corpus.productList.filter(function (p) { return p.independent.length >= AWARD_MIN_SOURCES; }).slice(0, 6);
     const rows = top.map(function (p, i) { return productRow(p, i + 1); }).join("");
     const tiles = corpus.guideList.slice(0, 6).map(guideTile).join("");
     const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Best of Fashion " + FRANCHISE_YEAR + "</span><h1>The women’s fashion products editors agree on most.</h1><p>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s clothing, shoes and bags, matches every mention to an exact product, and shows where independent sources agree. Every count links back to the receipts.</p><div style='display:flex;gap:10px;flex-wrap:wrap;margin-top:24px'><a class='btn' href='" + FRANCHISE_PATH + "'>See Best of Fashion " + FRANCHISE_YEAR + "</a><a class='btn alt' href='/methodology'>How we count</a></div>" + statRow(corpus.stats) + "</section>"
       + "<section class='section'><div class='eyebrow'>Most recommended right now</div><h2>Where independent sources agree</h2><p class='muted'>Products recommended by at least " + AWARD_MIN_SOURCES + " independent sources across everything Reccas tracks. A brand’s own page never counts.</p><div class='rankList'>" + rows + "</div><p style='margin-top:20px'><a class='btn alt' href='/most-recommended'>See the full ranking</a></p></section>"
       + (await trendingHomeSection(env))
-      + "<section class='section'><div class='eyebrow'>Browse Best of Fashion</div><h2>" + a.won.length + " winners across " + corpus.stats.guides + " categories</h2><div class='categoryGrid'>" + categoryCards(corpus) + "</div><div class='guideGrid' style='margin-top:22px'>" + tiles + "</div><p style='margin-top:20px'><a class='btn alt' href='" + FRANCHISE_PATH + "'>See all " + corpus.stats.guides + " categories</a></p></section>"
+      + "<section class='section'><div class='eyebrow'>Browse by type</div><h2>Who leads each category</h2><div class='cardRow'>" + typeCards(corpus) + "</div></section>"
+      + (onSale.length >= 4 ? "<section class='section'><div class='eyebrow'>Deals on recommended pieces</div><h2>On sale now</h2><p class='muted'>Recommended products currently selling at least 10% below the retailer’s own earlier price.</p><div class='cardRow'>" + saleCards(onSale, 6) + "</div><p style='margin-top:20px'><a class='btn alt' href='/alerts'>See all sales and set alerts</a></p></section>" : "")
+      + (fresh.length >= 4 ? "<section class='section'><div class='eyebrow'>Just made the list</div><h2>Newly recommended by " + PROMOTE_MIN_SOURCES + " or more sources</h2><p class='muted'>Products that recently reached " + PROMOTE_MIN_SOURCES + " independent sources and joined a Best of Fashion category.</p><div class='cardRow'>" + fresh.slice(0, 6).map(function (p) { return productCard(p, {badge: "New", badgeClass: "isNew"}); }).join("") + "</div></section>" : "")
+      + "<section class='section'><div class='eyebrow'>Browse Best of Fashion</div><h2>" + a.won.length + " winners across " + corpus.stats.guides + " categories</h2><div class='guideGrid' style='margin-top:22px'>" + tiles + "</div><p style='margin-top:20px'><a class='btn alt' href='" + FRANCHISE_PATH + "'>See all " + corpus.stats.guides + " categories</a></p></section>"
       + "<section class='section'><div class='eyebrow'>How Reccas works</div><h2>Consensus, not a judging panel.</h2><div class='grid'><div class='card'><h3>Track the recommendations</h3><p>We record named product recommendations from fashion publications, editors, stylists, creators and testers, with a link to each one.</p></div><div class='card'><h3>Match the exact product</h3><p>The same item gets described a dozen ways. Reccas resolves each mention to one product so repeated recommendations count together.</p></div><div class='card'><h3>Count independent agreement</h3><p>Products are ranked by how many independent sources recommend them. Brand and retailer pages are shown as references and never counted.</p></div></div><p style='margin-top:20px'><a class='plainLink' href='/methodology'>Read the full methodology →</a></p></section>"
       + signupBlock("/") + "</main>";
     return page("/", "Best of Fashion " + FRANCHISE_YEAR + ": Most Recommended Women’s Fashion", body, "Reccas tracks what fashion editors, stylists and testers recommend for women and ranks products by how many independent sources agree. Every source linked.", 200, null, {schema: [{"@type": "WebApplication", name: "Reccas", url: "https://reccas.com/", applicationCategory: "ShoppingApplication", operatingSystem: "Web", description: "Fashion recommendation consensus tracker."}]});
@@ -1004,18 +1075,12 @@ export function createPages(h) {
 
   async function alerts(env) {
     const corpus = await getCorpus(env);
-    let onSale = [], since = "";
-    try {
-      const rows = (await env.DB.prepare("SELECT product_key,observed_on,price FROM price_observations ORDER BY observed_on ASC").all()).results || [], first = new Map(), last = new Map();
-      rows.forEach(function (r) { if (!first.has(r.product_key)) first.set(r.product_key, r); last.set(r.product_key, r); if (!since) since = r.observed_on; });
-      last.forEach(function (now, key) { const base = first.get(key), prod = corpus.products.get(key); if (prod && base && Number(base.price) > 0 && Number(now.price) <= Number(base.price) * 0.9) onSale.push({prod: prod, now: Number(now.price), base: Number(base.price)}); });
-      onSale.sort(function (a, b) { return a.now / a.base - b.now / b.base; });
-    } catch (_) {}
+    const onSale = await saleItems(env, corpus), since = "";
     const tracked = corpus.productList.filter(function (p) { return p.pick._static; }).length;
-    const saleRows = onSale.slice(0, 20).map(function (d) { return productRow(d.prod, "↓", money(d.now) + ", down " + Math.round((1 - d.now / d.base) * 100) + "% from " + money(d.base)); }).join("");
+    const saleRows = saleCards(onSale, 24);
     const body = "<main class='wrap'><section class='hero'><span class='eyebrow'>Sale alerts</span><h1>Know when the most recommended pieces go on sale.</h1><p>Reccas checks live prices every day on the products fashion editors agree on. Join the list for a weekly note when one drops, or tap the heart on any product to watch that one.</p></section>"
       + signupBlock("/alerts", "Get sale alerts by email.", "At most one email a week, and only when a product recommended by two or more independent sources is at least 10% below the price Reccas first recorded. No account needed.")
-      + "<section class='section'><div class='eyebrow'>On sale now</div><h2>" + (onSale.length ? plural(onSale.length, "tracked product") + " below its starting price" : "Nothing tracked is on sale today") + "</h2>" + (onSale.length ? "<div class='rankList'>" + saleRows + "</div>" : "<p class='muted'>" + (since ? "Reccas has recorded prices since " + esc(since) + " and none of the tracked products is 10% or more below its first recorded price." : "Daily price tracking has just started, so there is no price history to compare yet.") + " Live prices are currently checked on " + tracked + " of " + corpus.stats.products + " products.</p>") + "</section>"
+      + "<section class='section'><div class='eyebrow'>On sale now</div><h2>" + (onSale.length ? plural(onSale.length, "recommended product") + " at 10% or more off" : "Nothing tracked is on sale today") + "</h2>" + (onSale.length ? "<div class='cardRow'>" + saleRows + "</div>" : "<p class='muted'>" + (since ? "Reccas has recorded prices since " + esc(since) + " and none of the tracked products is 10% or more below its first recorded price." : "Daily price tracking has just started, so there is no price history to compare yet.") + " Live prices are currently checked on " + tracked + " of " + corpus.stats.products + " products.</p>") + "</section>"
       + "<section class='section'><div class='eyebrow'>How it works</div><div class='grid'><div class='card'><h3>Tap the heart</h3><p>On any guide or product page, tap the heart and leave your email. No account needed.</p></div><div class='card'><h3>Reccas checks daily</h3><p>Where a live price is available it is recorded every day, so a drop is measured against a real starting price.</p></div><div class='card'><h3>One clear email</h3><p>You hear when the product you are watching falls 5% or more. Every email has an unsubscribe link.</p></div></div></section>"
       + "<section class='section'><div class='eyebrow'>Start with these</div><h2>Most recommended products to watch</h2><div class='rankList'>" + corpus.productList.slice(0, 8).map(function (p, i) { return productRow(p, i + 1); }).join("") + "</div></section></main>";
     return page("/alerts", "Sale Alerts on the Most Recommended Fashion Products", body, "Get an email when the fashion products editors recommend most go on sale. Reccas checks live prices daily and measures drops against a recorded starting price.", 200, null, {kind: "collection", breadcrumb: "Sale alerts"});
