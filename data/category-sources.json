@@ -347,5 +347,149 @@
       "source": "ELLE",
       "url": "https://www.elle.com/fashion/shopping/g41757283/best-wool-coats/"
     }
+  ],
+  "best-crossbody-bags": [
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/accessories/g40897294/best-cross-body-bags-for-women/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g60791452/best-small-crossbody-bags/"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/g36166216/best-crossbody-bags/"
+    }
+  ],
+  "best-crossbody-bags-for-travel": [
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g45701466/best-crossbody-bags-for-travel/"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/g32268970/best-travel-purse/"
+    }
+  ],
+  "best-shoulder-bags-for-women": [
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g69713562/best-shoulder-bags-women/"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/best-shoulder-bags/"
+    }
+  ],
+  "best-everyday-handbags-for-women": [
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g70392617/best-everyday-bags-women/"
+    }
+  ],
+  "best-travel-pants-for-women": [
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-travel-pants"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-travel-pants-for-women"
+    },
+    {
+      "source": "Forbes Vetted",
+      "url": "https://www.forbes.com/sites/forbes-personal-shopper/article/best-travel-clothes-for-women/"
+    }
+  ],
+  "best-work-pants-for-women": [
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-work-pants-for-women"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g70026567/best-work-pants-for-women-2026/"
+    }
+  ],
+  "best-jeans-for-tall-women": [
+    {
+      "source": "Harper's Bazaar",
+      "url": "https://www.harpersbazaar.com/fashion/trends/a64842997/best-jeans-for-tall-women/"
+    }
+  ],
+  "best-wedding-guest-dresses": [
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/fashion/dresses/best-wedding-guest-dresses-2026"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/a72670700/best-summer-wedding-guest-dresses-trends/"
+    }
+  ],
+  "best-work-dresses-for-women": [
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/best-work-dresses/"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/fall-fashion/fall-work-dresses-2026/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g60861507/best-summer-work-dresses/"
+    }
+  ],
+  "best-black-leggings-for-women": [
+    {
+      "source": "Good Housekeeping",
+      "url": "https://www.goodhousekeeping.com/what-to-buy/g70515215/best-workout-legging-reviews/"
+    }
+  ],
+  "best-bras-for-women": [
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/most-comfortable-bras"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g46175467/best-bra-brands/"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-cotton-bras"
+    }
+  ],
+  "best-underwear-for-women": [
+    {
+      "source": "Good Housekeeping",
+      "url": "https://www.goodhousekeeping.com/what-to-buy/g73533018/best-womens-underwear/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g26558403/best-underwear-for-women/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/a68039162/best-cotton-underwear-for-women/"
+    }
+  ],
+  "best-midi-skirts-for-women": [
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/fashion/skirts/best-white-midi-skirts"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/how-to-style-skirts/"
+    }
+  ],
+  "best-walking-sneakers-for-women": [
+    {
+      "source": "Forbes Vetted",
+      "url": "https://www.forbes.com/sites/forbes-personal-shopper/article/best-walking-shoes-for-women/"
+    }
   ]
 }
