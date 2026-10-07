@@ -5,6 +5,7 @@ export const FRANCHISE_YEAR = 2026;
 export const FRANCHISE_PATH = "/recommendations";
 export const AWARD_MIN_SOURCES = 3;
 export const TRACKING_STARTED = "2026-10-07";
+const VERIFY_WINDOW_DAYS = 60;
 const INDEXABLE_PRODUCT_MIN_SOURCES = 2;
 const INDEXABLE_SOURCE_MIN_PRODUCTS = 3;
 const MERGED_GUIDE_MAX_PICKS = 8;
@@ -124,9 +125,11 @@ function normalizeEvidence(pick) {
   });
   return out;
 }
+// The one definition of "counts": independent, still listed in the source, and re-checkable.
+export function counts(ev) { return !!(ev && ev.independent && !ev.disputed && !ev.blocked); }
 function independentNames(evidence) {
   const names = [];
-  evidence.forEach(function (ev) { if (ev.independent && !ev.disputed && names.indexOf(ev.source) < 0) names.push(ev.source); });
+  evidence.forEach(function (ev) { if (counts(ev) && names.indexOf(ev.source) < 0) names.push(ev.source); });
   return names;
 }
 
@@ -171,11 +174,14 @@ async function loadEdits(env) {
 // "disputed" stays visible but is not counted; "removed" is dropped entirely.
 function applyOverlay(productKey, evidence, overlay) {
   if (!overlay || !overlay.size) return evidence;
+  const cutoff = new Date(Date.now() - VERIFY_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
   return evidence.filter(function (ev) {
     const o = overlay.get(mentionKey(productKey, ev));
     if (!o) return true;
     if (o.status === "removed") return false;
-    if (o.status === "disputed") ev.disputed = true;
+    if (o.status === "disputed") { ev.disputed = true; ev.reviewedAt = o.reviewed_at ? String(o.reviewed_at).slice(0, 10) : null; }
+    // A publisher that blocks automated readers cannot be re-checked, so its recommendation is shown but not counted.
+    if (o.check_status === "blocked" && !(o.verified_on && o.verified_on >= cutoff) && o.status !== "confirmed") ev.blocked = true;
     if (o.author && !ev.author) ev.author = o.author;
     if (!ev.date && (o.modified_at || o.published_at)) { ev.date = o.modified_at || o.published_at; ev.dateKind = o.modified_at ? "updated" : "published"; }
     return true;
@@ -196,8 +202,12 @@ async function loadExtras(env) {
 async function loadOverlay(env) {
   const out = new Map();
   try {
-    const rows = (await env.DB.prepare("SELECT mention_key,status,author,published_at,modified_at FROM mention_observations WHERE status IS NOT NULL OR author IS NOT NULL OR published_at IS NOT NULL OR modified_at IS NOT NULL").all()).results || [];
+    const rows = (await env.DB.prepare("SELECT mention_key,status,reviewed_at,author,published_at,modified_at FROM mention_observations WHERE status IS NOT NULL OR author IS NOT NULL OR published_at IS NOT NULL OR modified_at IS NOT NULL").all()).results || [];
     rows.forEach(function (r) { out.set(r.mention_key, r); });
+  } catch (_) {}
+  try {
+    const checks = (await env.DB.prepare("SELECT mention_key,status,verified_on FROM mention_checks").all()).results || [];
+    checks.forEach(function (c) { const o = out.get(c.mention_key) || {mention_key: c.mention_key}; o.check_status = c.status; o.verified_on = c.verified_on; out.set(c.mention_key, o); });
   } catch (_) {}
   return out;
 }
@@ -267,7 +277,7 @@ function buildCorpus(edits, overlay, extras) {
     prod.independent = independentNames(prod.evidence);
     prod.category = prod.appearances[0] ? prod.appearances[0].category : "clothing";
     prod.evidence.forEach(function (ev) {
-      if (!ev.independent || ev.disputed) return;
+      if (!counts(ev)) return;
       if (!sources.has(ev.sourceSlug)) sources.set(ev.sourceSlug, {slug: ev.sourceSlug, name: ev.source, mentions: [], productKeys: []});
       const src = sources.get(ev.sourceSlug);
       src.mentions.push({productKey: prod.key, brand: prod.brand, name: prod.name, label: ev.label, url: ev.url, guideSlug: ev.guideSlug});
@@ -278,7 +288,7 @@ function buildCorpus(edits, overlay, extras) {
   const productList = Array.from(products.values()).sort(function (a, b) { return b.independent.length - a.independent.length || b.appearances.length - a.appearances.length || (a.brand + a.name).localeCompare(b.brand + b.name); });
   const sourceList = Array.from(sources.values()).sort(function (a, b) { return b.productKeys.length - a.productKeys.length || a.name.localeCompare(b.name); });
   let mentions = 0;
-  productList.forEach(function (p) { p.evidence.forEach(function (ev) { if (ev.independent && !ev.disputed) mentions++; }); });
+  productList.forEach(function (p) { p.evidence.forEach(function (ev) { if (counts(ev)) mentions++; }); });
   const counts = {clothing: 0, shoes: 0, bags: 0, accessories: 0};
   guideList.forEach(function (g) { counts[g.category]++; });
   const types = TYPE_MENU_ORDER.map(function (key) {
@@ -449,6 +459,7 @@ export async function saveCandidates(request, env) {
   stmts.push(env.DB.prepare("INSERT INTO extraction_runs (url,extracted_on,products,model,missing) VALUES (?,?,?,?,?) ON CONFLICT(url) DO UPDATE SET extracted_on=excluded.extracted_on,products=excluded.products,model=excluded.model,missing=excluded.missing").bind(url, day, rows.length, String(b.model || "").slice(0, 40) || null, JSON.stringify((Array.isArray(b.missing) ? b.missing : []).slice(0, 40))));
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
   resetCorpusCache();
+  try { await applyReviewRules(env); } catch (_) {}
   return Response.json({ok: true, saved: stmts.length - 1});
 }
 export async function extractionStatus(request, env) {
@@ -478,7 +489,37 @@ export async function saveMentionChecks(request, env) {
   });
   for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
   resetCorpusCache();
-  return Response.json({ok: true, saved: stmts.length});
+  let decided = 0;
+  try { decided = await applyReviewRules(env); } catch (_) {}
+  return Response.json({ok: true, saved: stmts.length, decided: decided});
+}
+// Decisions made without a person. Automation only ever changes its own earlier decisions
+// (notes starting "auto:"); anything set by hand on the admin screen is left alone.
+export async function applyReviewRules(env) {
+  await ensureObservationTables(env);
+  await ensureCandidates(env);
+  const rows = (await env.DB.prepare("SELECT o.mention_key,o.url,o.independent,o.status,o.status_note,c.status check_status FROM mention_observations o JOIN mention_checks c ON c.mention_key=o.mention_key").all()).results || [];
+  const cutoff = new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10), runs = new Map();
+  ((await env.DB.prepare("SELECT url,extracted_on,missing FROM extraction_runs WHERE extracted_on>?").bind(cutoff).all()).results || []).forEach(function (r) { let missing = []; try { missing = JSON.parse(r.missing || "[]"); } catch (_) {} runs.set(r.url, new Set(missing)); });
+  const now = new Date().toISOString(), stmts = [];
+  function set(key, status, note) { stmts.push(env.DB.prepare("UPDATE mention_observations SET status=?,status_note=?,reviewed_at=? WHERE mention_key=?").bind(status, note, now, key)); }
+  rows.forEach(function (r) {
+    const automatic = !r.status || String(r.status_note || "").indexOf("auto:") === 0;
+    if (!automatic) return;
+    let want = r.status || null, note = r.status_note || null;
+    if (r.check_status === "verified") { want = null; note = null; }
+    else if (r.check_status === "not_found") {
+      if (!r.independent) { want = "removed"; note = "auto: the brand or retailer page no longer shows the product"; }
+      else if (runs.has(r.url)) {
+        if (runs.get(r.url).has(r.mention_key)) { want = "disputed"; note = "auto: a second read did not find the product in the source"; }
+        else { want = "confirmed"; note = "auto: a second read found the product in the source"; }
+      }
+    }
+    if (want !== (r.status || null)) set(r.mention_key, want, note);
+  });
+  for (let i = 0; i < stmts.length; i += 40) await env.DB.batch(stmts.slice(i, i + 40));
+  if (stmts.length) resetCorpusCache();
+  return stmts.length;
 }
 async function mentionChecks(env, column, value) {
   const out = new Map();
@@ -747,10 +788,10 @@ export function createPages(h) {
       return list.map(function (ev) {
         const c = checks.get(mentionKey(key, ev)), verified = c && c.verified_on ? niceDate(c.verified_on) : "";
         const who = ev.independent ? "<a class='plainLink' href='/sources/" + esc(ev.sourceSlug) + "'>" + esc(ev.source) + "</a>" : esc(ev.source);
-        return "<tr><td>" + who + (ev.author ? "<div class='rankMeta'>" + esc(ev.author) + "</div>" : "") + "</td><td>" + esc(ev.label) + (ev.disputed ? "<div class='rankMeta'>Under review · not counted</div>" : "") + "</td><td>" + esc(ev.date ? (ev.dateKind === "updated" ? "Updated " : "") + niceDate(ev.date) : "") + "</td><td>" + esc(verified) + "</td><td>" + (ev.url ? "<a class='plainLink' href='" + esc(ev.url) + "' target='_blank' rel='noreferrer'>Original ↗</a>" : "") + "</td></tr>";
+        return "<tr><td>" + who + (ev.author ? "<div class='rankMeta'>" + esc(ev.author) + "</div>" : "") + "</td><td>" + esc(ev.label) + (ev.disputed ? "<div class='rankMeta'>No longer listed in the source" + (ev.reviewedAt ? " as of " + esc(niceDate(ev.reviewedAt)) : "") + " · not counted</div>" : ev.blocked ? "<div class='rankMeta'>Publisher blocks automated checks · not counted</div>" : "") + "</td><td>" + esc(ev.date ? (ev.dateKind === "updated" ? "Updated " : "") + niceDate(ev.date) : "") + "</td><td>" + esc(verified) + "</td><td>" + (ev.url ? "<a class='plainLink' href='" + esc(ev.url) + "' target='_blank' rel='noreferrer'>Original ↗</a>" : "") + "</td></tr>";
       }).join("");
     }
-    const indep = prod.evidence.filter(function (ev) { return ev.independent; }), refs = prod.evidence.filter(function (ev) { return !ev.independent; });
+    const indep = prod.evidence.filter(function (ev) { return ev.independent; }).sort(function (a, b) { return (counts(b) ? 1 : 0) - (counts(a) ? 1 : 0); }), refs = prod.evidence.filter(function (ev) { return !ev.independent; });
     const appearances = prod.appearances.map(function (a) { return "<a class='guidePill' href='/" + esc(a.slug) + "#pick-" + esc(a.rank) + "'>#" + esc(a.rank) + " in " + esc(a.title) + " <span>→</span></a>"; }).join("");
     const priceHistory = obs.prices.length > 1 ? "<section class='section'><h2>Price history</h2><p class='muted'>Live catalog prices Reccas has recorded since " + esc(obs.prices[obs.prices.length - 1].observed_on) + ".</p><div class='tablewrap' style='padding:6px 14px'><table class='evidenceTable'><thead><tr><th>Date</th><th>Price</th><th>Retailer</th></tr></thead><tbody>" + obs.prices.map(function (p) { return "<tr><td>" + esc(p.observed_on) + "</td><td>" + esc(money(p.price)) + "</td><td>" + esc(p.merchant || "") + "</td></tr>"; }).join("") + "</tbody></table></div></section>" : "";
     const watch = {watchKey: pick.sourceProductId ? "channel3:" + String(pick.sourceProductId) : "name:" + String(prod.brand || "") + "|" + String(prod.name || ""), brand: prod.brand, name: prod.name, productUrl: dest || "", guideSlug: prod.guideSlug, price: price};
@@ -775,7 +816,7 @@ export function createPages(h) {
       + "<h2>How products are ranked</h2><p>Each product’s count is the number of different independent sources that recommend it. A source is counted once per product, even if several of its articles mention it. Within a category, products are ordered by that count; when two products tie, the order is editorial. Commission rates and affiliate availability play no part in the order.</p>"
       + "<h2>How a category gets a winner</h2><p>A category has a Best of Fashion " + FRANCHISE_YEAR + " winner only when its leading product is recommended by at least " + AWARD_MIN_SOURCES + " independent sources. Right now " + a.won.length + " of " + s.guides + " categories meet that bar. The other " + a.pending.length + " are listed as not yet awarded on the <a href='" + FRANCHISE_PATH + "'>Best of Fashion page</a>.</p>"
       + "<h2>Shopping checks and money</h2><p>Reccas checks that each product is still sold and shows a current price where one is available. Some shopping links are affiliate links and Reccas may earn a commission. Where no affiliate link exists, the link goes straight to the product. Nobody can pay to be included or ranked.</p>"
-      + "<h2>How recommendations are kept fresh</h2><p>Every week Reccas re-reads each source article and checks that it still names the product. Each guide shows the date its sources were last verified and how many were confirmed; each product page shows the date per source. Prices are checked daily where a live price is available. A recommendation that can no longer be found is reviewed by a person. If the source turns out to name a different product, the recommendation is marked “under review”, stays visible and stops counting.</p><h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging recommendations on " + TRACKING_STARTED + ", so trends over time are not reported yet.</li><li>Some publishers block automated readers. A source Reccas could not re-read keeps its earlier verified date, or shows none.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
+      + "<h2>How recommendations are kept fresh</h2><p>Every week Reccas re-reads each source article and checks that it still names the product. Each guide shows the date its sources were last verified and how many were confirmed; each product page shows the date per source. Prices are checked daily where a live price is available. </p><ul><li>If the product is found, the recommendation counts.</li><li>If it is not found, the article is read a second time by an AI model. If that read finds the product under a slightly different name, the recommendation keeps counting. If it finds a different model or nothing, the recommendation stops counting that day and is shown as no longer listed, with the date.</li><li>A publisher that blocks automated readers cannot be re-checked, so its recommendations are shown but not counted.</li><li>A recommendation that stops counting is never deleted. The record of when it stopped is kept.</li><li>A category loses its winner automatically if its leader falls below " + AWARD_MIN_SOURCES + " counted sources.</li></ul><h2>Known limits</h2><ul><li>The dataset is small. Counts of three or four sources reflect agreement among the sources Reccas has recorded, not the whole fashion press.</li><li>Reccas began logging recommendations on " + TRACKING_STARTED + ", so trends over time are not reported yet.</li><li>Several large publishers block automated readers, so their recommendations are not counted. That makes the counts conservative.</li><li>Most recommendations do not yet carry the name of the individual writer or the date the source published it.</li><li>Agreement is not the same as fit. A widely recommended product can still be wrong for you, which is why each product keeps its fit notes and caveats.</li></ul>"
       + "<h2>Corrections</h2><p>If a recommendation is misattributed, a link is broken or a product is matched wrongly, email <a href='mailto:hello@reccas.com'>hello@reccas.com</a> and it will be fixed.</p></section></main>";
     return page("/methodology", "Methodology: How Best of Fashion Is Counted", body, "How Reccas counts fashion recommendations: what qualifies as an independent source, why brand pages are excluded, how products are ranked and where the data is thin.", 200, null, {kind: "article", headline: "How Best of Fashion is counted", breadcrumb: "Methodology", modified: today()});
   }
@@ -788,10 +829,10 @@ export function createPages(h) {
     const total = guide.independentSources.length, checks = await mentionChecks(env, "guide_slug", slug);
     // Sources that block automated readers are left out of the ratio rather than counted as failures.
     let lastVerified = "", confirmed = 0, checkable = 0;
-    guide.picks.forEach(function (p) { p.evidence.forEach(function (ev) { if (!ev.independent) return; const c = checks.get(mentionKey(p.key, ev)); if (!c || c.status === "blocked") return; checkable++; if (c.status === "verified" && c.verified_on) { confirmed++; if (c.verified_on > lastVerified) lastVerified = c.verified_on; } }); });
+    guide.picks.forEach(function (p) { p.evidence.forEach(function (ev) { if (!counts(ev)) return; const c = checks.get(mentionKey(p.key, ev)); if (!c || c.status === "blocked") return; checkable++; if (c.status === "verified" && c.verified_on) { confirmed++; if (c.verified_on > lastVerified) lastVerified = c.verified_on; } }); });
     const cards = picks.map(function (x) {
       const evidence = x.evidence || [], dest = x.shopUrl || x.canonicalUrl || (evidence[0] && evidence[0].url) || null, track = dest ? "/_api/out?edit=" + encodeURIComponent(slug) + "&to=" + encodeURIComponent(dest) : "#";
-      const ev = evidence.map(function (z) { return "<a class='editSource" + (z.independent && !z.disputed ? "" : " isReference") + "' href='" + esc(z.url) + "' target='_blank' rel='noreferrer'><strong>" + esc(z.source) + "</strong> · " + esc(z.disputed ? "Under review, not counted" : (z.independent ? z.label : "Brand or retailer page")) + " ↗</a>"; }).join("");
+      const ev = evidence.map(function (z) { return "<a class='editSource" + (counts(z) ? "" : " isReference") + "' href='" + esc(z.url) + "' target='_blank' rel='noreferrer'><strong>" + esc(z.source) + "</strong> · " + esc(z.disputed ? "No longer listed, not counted" : z.blocked ? "Can’t be re-checked, not counted" : (z.independent ? z.label : "Brand or retailer page")) + " ↗</a>"; }).join("");
       const img = imageUrl({slug: slug, rank: x.rank});
       const visual = "<img src='" + esc(img) + "' alt='" + esc(x.brand + " " + x.name) + "' loading='" + (x.rank === 1 ? "eager" : "lazy") + "'>";
       const watchKey = x.sourceProductId ? "channel3:" + String(x.sourceProductId) : (x.productId ? "product:" + String(x.productId) : (x.canonicalUrl ? "url:" + String(x.canonicalUrl) : "name:" + String(x.brand || "") + "|" + String(x.name || "")));
@@ -808,7 +849,7 @@ export function createPages(h) {
     }).join("");
     const lead = picks[0], awarded = lead && lead.independent.length >= AWARD_MIN_SOURCES;
     const metrics = "<div class='editMetrics'><span><strong>" + esc(picks.length) + "</strong> ranked picks</span><span><strong>" + esc(total) + "</strong> independent sources</span>" + (lastVerified ? "<span><strong>" + esc(niceDate(lastVerified)) + "</strong> sources last verified · " + confirmed + " of " + checkable + " readable sources confirmed</span>" : "<span><strong>" + esc(guide.checkedLabel) + "</strong> last checked</span>") + "</div>";
-    const intro = "<section class='editIntro'><div><span class='eyebrow'>" + (awarded ? "Best of Fashion " + FRANCHISE_YEAR + " winner" : "Not yet awarded") + "</span><h2>" + (awarded ? esc(lead.brand + " " + lead.name) : "Still gathering evidence.") + "</h2></div><p>" + (awarded ? esc(lead.brand + " " + lead.name) + " leads this category with " + lead.independent.length + " independent sources. " : "No product here has reached the " + AWARD_MIN_SOURCES + " independent sources needed to win the category. ") + "Picks are ranked by how many independent sources recommend them. Brand and retailer pages are shown with a dashed outline and are not counted. <a class='plainLink' href='/methodology'>How we count</a>.</p></section>";
+    const intro = "<section class='editIntro'><div><span class='eyebrow'>" + (awarded ? "Best of Fashion " + FRANCHISE_YEAR + " winner" : "Not yet awarded") + "</span><h2>" + (awarded ? esc(lead.brand + " " + lead.name) : "Still gathering evidence.") + "</h2></div><p>" + (awarded ? esc(lead.brand + " " + lead.name) + " leads this category with " + lead.independent.length + " independent sources. " : "No product here has reached the " + AWARD_MIN_SOURCES + " independent sources needed to win the category. ") + "Picks are ranked by how many independent sources recommend them. Sources shown with a dashed outline are not counted: brand and retailer pages, sources that no longer list the product, and publishers whose pages cannot be re-checked. <a class='plainLink' href='/methodology'>How we count</a>.</p></section>";
     const method = "<section class='editMethod'><span class='eyebrow'>How Reccas built this guide</span><h2>What counts as a recommendation?</h2><p>" + esc(guide.freshnessCopy || "The product must still satisfy the stated category, price, or use-case constraint when Reccas checks it.") + " Reccas may earn a commission from some shopping links; that does not affect the ranking.</p></section>";
     const socialImage = lead ? "https://reccas.com" + imageUrl({slug: slug, rank: lead.rank}) : null;
     const listSchema = {"@type": "ItemList", name: guide.title, itemListElement: picks.map(function (x, i) { return {"@type": "ListItem", position: i + 1, name: String(x.brand + " " + x.name), url: "https://reccas.com/products/" + x.key}; })};

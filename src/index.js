@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
+import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus} from "./consensus.js";
 import {createReview} from "./review.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe} from "./email.js";
 const STATIC_COLLECTIONS = {
@@ -892,7 +892,7 @@ const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:enrichSt
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
 async function requireAdmin(request,env){var who=await sessionUser(request,env);if(!who)return{error:"Not authenticated",status:401};var role=await env.DB.prepare("SELECT role FROM users WHERE id=? LIMIT 1").bind(who.user.id).first();if(!role||role.role!=="admin")return{error:"Admin access required",status:403};return null}
 const review=createReview({page:page,esc:esc,requireAdmin:requireAdmin});
-export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{var r=await syncMentions(env);await syncPrices(env,r.corpus,enrichStaticPick);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
+export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){try{var r=await syncMentions(env);await applyReviewRules(env);await syncPrices(env,r.corpus,enrichStaticPick);await sendPriceDropAlerts(env);await sendSaleDigest(env)}catch(_){}})())},async fetch(request,env,ctx){
   var u=new URL(request.url),path=u.pathname.replace(/\/+$/,"")||"/";
   if(path==="/favicon-r.png"||path==="/favicon.png"||path==="/favicon.ico")return faviconResponse();
   if(path==="/health")return Response.json({ok:true,service:"reccas",db:"d1",auth:{password:true,google:!!(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET)}});
