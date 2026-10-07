@@ -451,10 +451,13 @@ function channel3Image(pr){
   for(var i=0;i<imgs.length;i++){var v=typeof imgs[i]==="string"?imgs[i]:(imgs[i]&&imgs[i].url||imgs[i]&&imgs[i].src);if(v)return v}
   return null;
 }
-function channel3BestOffer(pr){
-  var offers=(pr&&pr.offers||[]).filter(function(o){return o&&o.url});
-  offers.sort(function(a,b){var ac=Number(a.max_commission_rate||0),bc=Number(b.max_commission_rate||0);if((bc>0)!=(ac>0))return bc>0?-1:1;if(bc!==ac)return bc-ac;var ap=a.price&&Number(a.price.price),bp=b.price&&Number(b.price.price);return (isFinite(ap)?ap:1e12)-(isFinite(bp)?bp:1e12)});
-  return offers[0]||null;
+function channel3BestOffer(pr,pick){
+  var offers=(pr&&pr.offers||[]).filter(function(o){return o&&o.url}),preferred=String(pick&&pick.preferredDomain||"").toLowerCase().replace(/^www\./,"");
+  function host(o){return domainOnly(String(o&&o.domain||o&&o.url||""))}
+  function sort(list){return list.slice().sort(function(a,b){var ac=Number(a.max_commission_rate||0),bc=Number(b.max_commission_rate||0);if((bc>0)!=(ac>0))return bc>0?-1:1;if(bc!==ac)return bc-ac;var ap=a.price&&Number(a.price.price),bp=b.price&&Number(b.price.price);return (isFinite(ap)?ap:1e12)-(isFinite(bp)?bp:1e12)})}
+  if(preferred){var official=offers.filter(function(o){var h=host(o);return h===preferred||h.endsWith("."+preferred)});if(official.length)return sort(official)[0]}
+  if(pick&&pick.fallbackPrice!=null){var target=Number(pick.fallbackPrice),reasonable=offers.filter(function(o){var p=o.price&&Number(o.price.price);return isFinite(p)&&p>=target*.65&&p<=target*1.45});if(reasonable.length)return sort(reasonable)[0]}
+  return sort(offers)[0]||null;
 }
 async function channel3StaticPick(env,pick){
   if(!env.CHANNEL3_API_KEY)return null;
@@ -473,11 +476,11 @@ async function channel3StaticPick(env,pick){
       if(cats.some(function(c){return c==="dresses"||c==="dress"}))continue;
       var score=0;if(brand===wantBrand)score+=20;else if(brand&&wantBrand)score+=10;
       var tn=productMatchText(title),need=catalogNeedle(pick.catalogQuery||pick.name);need.forEach(function(t){if(tn.indexOf(t)>=0)score+=3});
-      if(channel3Image(pr))score+=2;if(channel3BestOffer(pr))score+=2;
+      if(channel3Image(pr))score+=2;if(channel3BestOffer(pr,pick))score+=2;
       if(score>bestScore){best=pr;bestScore=score}
     }
     if(!best)return null;
-    var offer=channel3BestOffer(best),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
+    var offer=channel3BestOffer(best,pick),img=channel3Image(best),rate=offer?Number(offer.max_commission_rate||0):0,price=offer&&offer.price&&offer.price.price!=null?Number(offer.price.price):null;
     var out=Object.assign({},pick,{sourceProductId:best.id||null,productId:null,imageUrl:img||pick.imageUrl||null,price:price==null?pick.fallbackPrice:price,shopUrl:offer&&offer.url||pick.canonicalUrl||null,_catalog:true,_channel3:true,_affiliate:!!(offer&&rate>0),_commissionRate:rate||0});
     return out;
   }catch(_){return null}
