@@ -242,7 +242,9 @@ function nameTokens(v) { return slugify(v).split("-").filter(function (t) { retu
 // "Clean Cut T-Shirt" and "Clean Cut Regular T-Shirt" match; "Lianna Super Bit Weejuns" and "Whitney Superlug Weejuns" do not.
 function sameProductName(a, b) {
   const x = nameTokens(a), y = nameTokens(b), small = x.length <= y.length ? x : y, big = x.length <= y.length ? y : x;
-  return small.length >= 2 && small.every(function (t) { return big.indexOf(t) >= 0; });
+  if (!small.length || !small.every(function (t) { return big.indexOf(t) >= 0; })) return false;
+  // A one-word name such as "Margo" or "Campo" is distinctive enough when it is the whole of the shorter name.
+  return small.length >= 2 || (small[0].length >= 5 && big.length <= 3);
 }
 async function loadOverlay(env) {
   const out = new Map();
@@ -288,8 +290,14 @@ function buildCorpus(edits, overlay, extras) {
     });
     ((extras && extras.promoted && extras.promoted.get(canonical)) || []).forEach(function (raw) {
       const key = slugify(raw.brand + " " + raw.name);
-      if (!key || byKey.has(key)) return;
-      if (Array.from(byKey.values()).some(function (p) { return compact(p.brand) === compact(raw.brand) && sameProductName(p.name, raw.name); })) return;
+      if (!key) return;
+      // If the guide already lists this product under another spelling, the new sources join it instead.
+      const existing = byKey.get(key) || Array.from(byKey.values()).find(function (p) { return compact(p.brand) === compact(raw.brand) && sameProductName(p.name, raw.name); });
+      if (existing) {
+        const ids = new Set(existing.evidence.map(function (ev) { return ev.sourceSlug + "|" + ev.url; }));
+        applyOverlay(existing.key, normalizeEvidence(Object.assign({}, existing, {evidence: raw.evidence})), overlay).forEach(function (ev) { if (!ids.has(ev.sourceSlug + "|" + ev.url)) existing.evidence.push(ev); });
+        return;
+      }
       byKey.set(key, Object.assign({}, raw, {key: key, evidence: applyOverlay(key, normalizeEvidence(raw), overlay), _static: true, _order: order++}));
     });
     let picks = Array.from(byKey.values());

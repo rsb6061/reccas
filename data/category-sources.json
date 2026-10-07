@@ -1,76 +1,339 @@
 {
   "_about": "Articles to read for each Best of Fashion category, beyond the ones a guide already cites. Depth per question is what creates overlap between sources. Only real publications; no syndicated copies.",
   "best-white-t-shirts-for-women": [
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-white-t-shirts-women"},
-    {"source": "WWD", "url": "https://wwd.com/shop/shop-fashion/best-white-t-shirts-for-women-1235140241/"},
-    {"source": "PureWow", "url": "https://www.purewow.com/fashion/best-white-t-shirts-for-women"},
-    {"source": "CNN Underscored", "url": "https://edition.cnn.com/cnn-underscored/reviews/best-white-t-shirts-for-women"},
-    {"source": "NBC Select", "url": "https://www.nbcnews.com/select/shopping/best-white-t-shirt-tested-reviewed-rcna207331"}
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-white-t-shirts-women"
+    },
+    {
+      "source": "WWD",
+      "url": "https://wwd.com/shop/shop-fashion/best-white-t-shirts-for-women-1235140241/"
+    },
+    {
+      "source": "PureWow",
+      "url": "https://www.purewow.com/fashion/best-white-t-shirts-for-women"
+    },
+    {
+      "source": "CNN Underscored",
+      "url": "https://edition.cnn.com/cnn-underscored/reviews/best-white-t-shirts-for-women"
+    },
+    {
+      "source": "NBC Select",
+      "url": "https://www.nbcnews.com/select/shopping/best-white-t-shirt-tested-reviewed-rcna207331"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-white-t-shirts-for-women"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/personal-style/g70061623/best-white-t-shirt-for-women/"
+    },
+    {
+      "source": "Cosmopolitan",
+      "url": "https://www.cosmopolitan.com/style-beauty/fashion/g60748196/best-white-t-shirt-for-women/"
+    }
   ],
   "best-white-sneakers-under-200": [
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-white-sneakers"},
-    {"source": "TODAY", "url": "https://www.today.com/shop/best-white-sneakers-women-t214814"},
-    {"source": "Refinery29", "url": "https://www.refinery29.com/en-us/white-sneakers"},
-    {"source": "Yahoo Shopping", "url": "https://shopping.yahoo.com/style/shoes/article/best-white-sneakers-170825847.html"},
-    {"source": "PureWow", "url": "https://www.purewow.com/fashion/best-white-sneakers"},
-    {"source": "W Magazine", "url": "https://www.wmagazine.com/fashion/best-white-sneakers"},
-    {"source": "WWD", "url": "https://wwd.com/shop/shop-shoes/best-white-sneakers-for-women-1237893917/"}
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-white-sneakers"
+    },
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/shop/best-white-sneakers-women-t214814"
+    },
+    {
+      "source": "Refinery29",
+      "url": "https://www.refinery29.com/en-us/white-sneakers"
+    },
+    {
+      "source": "Yahoo Shopping",
+      "url": "https://shopping.yahoo.com/style/shoes/article/best-white-sneakers-170825847.html"
+    },
+    {
+      "source": "PureWow",
+      "url": "https://www.purewow.com/fashion/best-white-sneakers"
+    },
+    {
+      "source": "W Magazine",
+      "url": "https://www.wmagazine.com/fashion/best-white-sneakers"
+    },
+    {
+      "source": "WWD",
+      "url": "https://wwd.com/shop/shop-shoes/best-white-sneakers-for-women-1237893917/"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-minimal-white-sneakers"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-white-sneakers-for-women"
+    },
+    {
+      "source": "Harper's Bazaar",
+      "url": "https://www.harpersbazaar.com/fashion/a60887873/best-white-designer-sneakers/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g60371305/best-white-leather-sneakers-women/"
+    }
   ],
   "best-loafers-under-250": [
-    {"source": "Yahoo Shopping", "url": "https://shopping.yahoo.com/style/shoes/article/best-loafers-for-women-195131392.html"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-loafers-for-women"},
-    {"source": "PureWow", "url": "https://www.purewow.com/fashion/most-comfortable-womens-loafers"},
-    {"source": "TODAY", "url": "https://www.today.com/shop/best-women-loafers-rcna150633"}
+    {
+      "source": "Yahoo Shopping",
+      "url": "https://shopping.yahoo.com/style/shoes/article/best-loafers-for-women-195131392.html"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-loafers-for-women"
+    },
+    {
+      "source": "PureWow",
+      "url": "https://www.purewow.com/fashion/most-comfortable-womens-loafers"
+    },
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/shop/best-women-loafers-rcna150633"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-summer-loafers"
+    },
+    {
+      "source": "Harper's Bazaar",
+      "url": "https://www.harpersbazaar.com/fashion/g62883320/best-suede-loafers-for-women/"
+    }
   ],
   "best-ballet-flats-under-250": [
-    {"source": "TODAY", "url": "https://www.today.com/shop/the-best-ballet-flats-rcna200713"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-ballet-flats"},
-    {"source": "Marie Claire", "url": "https://www.marieclaire.com/fashion/best-ballet-flats/"},
-    {"source": "Refinery29", "url": "https://www.refinery29.com/en-us/best-ballet-flats"},
-    {"source": "Yahoo Shopping", "url": "https://shopping.yahoo.com/style/shoes/articles/best-ballet-flats-according-editors-162200554.html"}
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/shop/the-best-ballet-flats-rcna200713"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-ballet-flats"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/best-ballet-flats/"
+    },
+    {
+      "source": "Refinery29",
+      "url": "https://www.refinery29.com/en-us/best-ballet-flats"
+    },
+    {
+      "source": "Yahoo Shopping",
+      "url": "https://shopping.yahoo.com/style/shoes/articles/best-ballet-flats-according-editors-162200554.html"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-soft-ballet-flats"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-brown-ballet-flats"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-ballet-flats-for-women"
+    }
   ],
   "best-straight-leg-jeans-for-women": [
-    {"source": "The Mom Edit", "url": "https://themomedit.com/best-straight-leg-jeans-for-women/"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/straight-leg-jeans"},
-    {"source": "PureWow", "url": "https://www.purewow.com/fashion/best-straight-leg-jeans"},
-    {"source": "Yahoo Shopping", "url": "https://shopping.yahoo.com/style/clothing/articles/straight-leg-jeans-fashion-editors-151758877.html"},
-    {"source": "Marie Claire", "url": "https://www.marieclaire.com/fashion/a36329920/best-straight-leg-jeans/"}
+    {
+      "source": "The Mom Edit",
+      "url": "https://themomedit.com/best-straight-leg-jeans-for-women/"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/straight-leg-jeans"
+    },
+    {
+      "source": "PureWow",
+      "url": "https://www.purewow.com/fashion/best-straight-leg-jeans"
+    },
+    {
+      "source": "Yahoo Shopping",
+      "url": "https://shopping.yahoo.com/style/clothing/articles/straight-leg-jeans-fashion-editors-151758877.html"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/a36329920/best-straight-leg-jeans/"
+    }
   ],
   "best-black-trousers-for-women": [
-    {"source": "CNN Underscored", "url": "https://www.cnn.com/cnn-underscored/fashion/best-black-pants-for-women"},
-    {"source": "Refinery29", "url": "https://www.refinery29.com/en-us/womens-dress-pants-black"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-black-trousers-for-women"},
-    {"source": "The Mom Edit", "url": "https://themomedit.com/style-women-black-work-pants-try-on-travel-trousers-trendy-profesional-clothes-dressingroomselfies-anne/"},
-    {"source": "Yahoo Shopping", "url": "https://shopping.yahoo.com/style/clothing/articles/best-black-pants-every-office-202500490.html"}
+    {
+      "source": "CNN Underscored",
+      "url": "https://www.cnn.com/cnn-underscored/fashion/best-black-pants-for-women"
+    },
+    {
+      "source": "Refinery29",
+      "url": "https://www.refinery29.com/en-us/womens-dress-pants-black"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-black-trousers-for-women"
+    },
+    {
+      "source": "The Mom Edit",
+      "url": "https://themomedit.com/style-women-black-work-pants-try-on-travel-trousers-trendy-profesional-clothes-dressingroomselfies-anne/"
+    },
+    {
+      "source": "Yahoo Shopping",
+      "url": "https://shopping.yahoo.com/style/clothing/articles/best-black-pants-every-office-202500490.html"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-black-trousers"
+    }
   ],
   "best-cashmere-sweaters-under-200": [
-    {"source": "The Mom Edit", "url": "https://themomedit.com/best-cashmere-sweaters-women/"},
-    {"source": "TODAY", "url": "https://www.today.com/shop/best-cashmere-sweaters-for-women-rcna253906"},
-    {"source": "Marie Claire", "url": "https://www.marieclaire.com/fashion/g35397843/best-cashmere-sweaters/"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-cashmere-sweaters-for-women"},
-    {"source": "CNN Underscored", "url": "https://edition.cnn.com/cnn-underscored/fashion/best-cashmere-sweaters"},
-    {"source": "PureWow", "url": "https://www.purewow.com/fashion/best-cashmere-sweaters"},
-    {"source": "Yahoo Shopping", "url": "https://shopping.yahoo.com/style/clothing/articles/best-affordable-cashmere-sweaters-women-110017000.html"}
+    {
+      "source": "The Mom Edit",
+      "url": "https://themomedit.com/best-cashmere-sweaters-women/"
+    },
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/shop/best-cashmere-sweaters-for-women-rcna253906"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/g35397843/best-cashmere-sweaters/"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-cashmere-sweaters-for-women"
+    },
+    {
+      "source": "CNN Underscored",
+      "url": "https://edition.cnn.com/cnn-underscored/fashion/best-cashmere-sweaters"
+    },
+    {
+      "source": "PureWow",
+      "url": "https://www.purewow.com/fashion/best-cashmere-sweaters"
+    },
+    {
+      "source": "Yahoo Shopping",
+      "url": "https://shopping.yahoo.com/style/clothing/articles/best-affordable-cashmere-sweaters-women-110017000.html"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-cashmere-sweaters-knits"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-cashmere-sweaters-for-women"
+    }
   ],
   "best-blazers-for-women": [
-    {"source": "TODAY", "url": "https://www.today.com/shop/best-blazers-for-women-rcna169713"},
-    {"source": "Marie Claire", "url": "https://www.marieclaire.com/fashion/best-blazers-for-women/"},
-    {"source": "CNN Underscored", "url": "https://www.cnn.com/cnn-underscored/fashion/best-blazers-for-women"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/wool-blazers-for-women"}
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/shop/best-blazers-for-women-rcna169713"
+    },
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/best-blazers-for-women/"
+    },
+    {
+      "source": "CNN Underscored",
+      "url": "https://www.cnn.com/cnn-underscored/fashion/best-blazers-for-women"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/wool-blazers-for-women"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-blazer-for-women"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g41123383/best-oversized-blazers/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g43894556/best-summer-blazers/"
+    },
+    {
+      "source": "Cosmopolitan",
+      "url": "https://www.cosmopolitan.com/style-beauty/fashion/g42243288/best-leather-blazers/"
+    }
   ],
   "best-trench-coats-under-300": [
-    {"source": "Marie Claire", "url": "https://www.marieclaire.com/fashion/a36299863/best-trench-coats-for-women/"},
-    {"source": "WWD", "url": "https://wwd.com/shop/shop-fashion/best-trench-coats-for-women-1235444321/"},
-    {"source": "TODAY", "url": "https://www.today.com/shop/best-trench-coats-for-women-t236694"},
-    {"source": "Grazia", "url": "https://graziadaily.co.uk/fashion/shopping/best-trench-coats-for-women/"},
-    {"source": "W Magazine", "url": "https://www.wmagazine.com/fashion/best-trench-coats-for-women"},
-    {"source": "Bustle", "url": "https://www.bustle.com/style/best-trench-coats-for-women"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/fashion/outerwear/best-trench-coat-try-on-2026"}
+    {
+      "source": "Marie Claire",
+      "url": "https://www.marieclaire.com/fashion/a36299863/best-trench-coats-for-women/"
+    },
+    {
+      "source": "WWD",
+      "url": "https://wwd.com/shop/shop-fashion/best-trench-coats-for-women-1235444321/"
+    },
+    {
+      "source": "TODAY",
+      "url": "https://www.today.com/shop/best-trench-coats-for-women-t236694"
+    },
+    {
+      "source": "Grazia",
+      "url": "https://graziadaily.co.uk/fashion/shopping/best-trench-coats-for-women/"
+    },
+    {
+      "source": "W Magazine",
+      "url": "https://www.wmagazine.com/fashion/best-trench-coats-for-women"
+    },
+    {
+      "source": "Bustle",
+      "url": "https://www.bustle.com/style/best-trench-coats-for-women"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/fashion/outerwear/best-trench-coat-try-on-2026"
+    },
+    {
+      "source": "Vogue",
+      "url": "https://www.vogue.com/article/best-trench-coats-for-women"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-trench-coat-for-women"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/a70710981/best-cropped-trench-coats-for-women-2026/"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g40410381/best-trench-coats-women/"
+    },
+    {
+      "source": "Cosmopolitan",
+      "url": "https://www.cosmopolitan.com/style-beauty/fashion/g38820956/best-trench-coats-for-women/"
+    }
   ],
   "best-wool-coats-for-women": [
-    {"source": "WWD", "url": "https://wwd.com/shop/shop-fashion/best-wool-coats-women-1235593593/"},
-    {"source": "Who What Wear", "url": "https://www.whowhatwear.com/best-wool-coats"},
-    {"source": "W Magazine", "url": "https://www.wmagazine.com/fashion/best-wool-coats-for-women-and-men-under-500"},
-    {"source": "Grazia", "url": "https://graziadaily.co.uk/fashion/shopping/best-wool-coats/"}
+    {
+      "source": "WWD",
+      "url": "https://wwd.com/shop/shop-fashion/best-wool-coats-women-1235593593/"
+    },
+    {
+      "source": "Who What Wear",
+      "url": "https://www.whowhatwear.com/best-wool-coats"
+    },
+    {
+      "source": "W Magazine",
+      "url": "https://www.wmagazine.com/fashion/best-wool-coats-for-women-and-men-under-500"
+    },
+    {
+      "source": "Grazia",
+      "url": "https://graziadaily.co.uk/fashion/shopping/best-wool-coats/"
+    },
+    {
+      "source": "Glamour",
+      "url": "https://www.glamour.com/gallery/best-wool-coats-for-women"
+    },
+    {
+      "source": "ELLE",
+      "url": "https://www.elle.com/fashion/shopping/g41757283/best-wool-coats/"
+    }
   ]
 }

@@ -25,11 +25,11 @@ export function matchProduct(brand, name, known) {
   const key = slugify(brand + " " + name), b = compact(brand), want = tokens(name);
   const exact = known.find((p) => p.key === key);
   if (exact) return exact.key;
-  if (want.length < 2) return null;
   const hits = known.filter((p) => {
     if (compact(p.brand) !== b) return false;
     const have = tokens(p.name), small = want.length <= have.length ? want : have, big = want.length <= have.length ? have : want;
-    return small.length >= 2 && small.every((t) => big.includes(t));
+    if (!small.length || !small.every((t) => big.includes(t))) return false;
+    return small.length >= 2 || (small[0].length >= 5 && big.length <= 3);
   });
   return hits.length === 1 ? hits[0].key : null;
 }

@@ -37,6 +37,8 @@ jobs:
           echo "::add-mask::$KEY"
           echo "$KEY" | npx wrangler secret put VERIFY_KEY
           echo "VERIFY_KEY=$KEY" >> "$GITHUB_ENV"
+      - name: Look for new guides on publishers' own sites
+        run: node scripts/discover-sources.mjs
       - name: Read articles
         env:
           LIMIT: ${{ inputs.limit || '200' }}
