@@ -18,6 +18,10 @@ database_id = "f06da302-549f-4059-a8bd-39956188c1d8"
 [vars]
 TRENDING = "off"
 
+# Cloudflare's built-in AI, used to read articles when the OpenAI account cannot.
+[ai]
+binding = "AI"
+
 # Cloudflare Email Service, sending from hello@reccas.com.
 [[send_email]]
 name = "EMAIL"

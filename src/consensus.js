@@ -695,6 +695,10 @@ function personPrompt(person, ownBrands) {
 function topicPrompt(topic) {
   return "You read an article about " + topic + " and list the specific products it recommends. Return JSON: {\"products\":[{\"brand\":\"\",\"name\":\"\",\"label\":\"\",\"basis\":\"\",\"price\":null}]}. Include only products the article itself recommends to readers, each with a brand and the product name exactly as the article writes it. Leave out products it criticises or ranks at the bottom, and anything from ads, navigation or related-article links. label is the article's own short descriptor, such as 'Best overall', or an empty string. basis is tested if the article says it tasted, tested or used the product, otherwise listed. price is the US dollar price stated, or null. Never invent a product. At most 30 products.";
 }
+const WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+function cleanProducts(parsed) {
+  return (Array.isArray(parsed.products) ? parsed.products : []).slice(0, 40).map(function (p) { return {brand: String(p.brand || "").trim().slice(0, 80), name: String(p.name || "").trim().slice(0, 160), label: String(p.label || "").trim().slice(0, 120), basis: ["tested", "owned", "editor_pick", "listed"].indexOf(p.basis) >= 0 ? p.basis : "listed", price: Number(p.price) > 0 && Number(p.price) < 100000 ? Number(p.price) : null, sponsored: p.sponsored === true, category: String(p.category || "").toLowerCase().slice(0, 20)}; }).filter(function (p) { return p.brand && p.name; });
+}
 const EXTRACT_PROMPT = "You read a women's fashion article and list the specific products it recommends. Return JSON: {\"products\":[{\"brand\":\"\",\"name\":\"\",\"label\":\"\",\"basis\":\"\",\"price\":null}]}. Rules: include only products the article itself recommends to readers, each with a brand and a specific product or model name exactly as the article writes it. Leave out brands named without a product, products mentioned only for comparison or criticism, and anything from ads, navigation or related-article links. label is the article's own short descriptor for the product, such as 'Best overall', or an empty string. basis is one of tested, owned, editor_pick, listed. price is the US dollar price the article states for the product as a number, or null if it states none. Never invent a product. At most 40 products.";
 export async function extractProducts(request, env) {
   if (!verifyKeyOk(request, env)) return Response.json({error: "Not authorized"}, {status: 401});
@@ -703,15 +707,24 @@ export async function extractProducts(request, env) {
   try { b = await request.json(); } catch (_) {}
   const text = String(b.text || "").slice(0, 60000);
   if (text.length < 500) return Response.json({error: "Text too short"}, {status: 400});
+  const system = b.topic ? topicPrompt(String(b.topic).slice(0, 80)) : b.person ? personPrompt(String(b.person).slice(0, 80), (Array.isArray(b.ownBrands) ? b.ownBrands : []).slice(0, 8).map(function (x) { return String(x).slice(0, 60); })) : EXTRACT_PROMPT;
   let lastError = "no model answered";
   for (const model of ["gpt-4o-mini", "gpt-5-mini"]) {
     try {
-      const r = await fetch("https://api.openai.com/v1/chat/completions", {method: "POST", headers: {"content-type": "application/json", Authorization: "Bearer " + env.OPENAI_API_KEY}, body: JSON.stringify({model: model, response_format: {type: "json_object"}, messages: [{role: "system", content: b.topic ? topicPrompt(String(b.topic).slice(0, 80)) : b.person ? personPrompt(String(b.person).slice(0, 80), (Array.isArray(b.ownBrands) ? b.ownBrands : []).slice(0, 8).map(function (x) { return String(x).slice(0, 60); })) : EXTRACT_PROMPT}, {role: "user", content: "Article from " + String(b.source || "").slice(0, 80) + " (" + String(b.url || "").slice(0, 300) + "):\n\n" + text}]})});
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {method: "POST", headers: {"content-type": "application/json", Authorization: "Bearer " + env.OPENAI_API_KEY}, body: JSON.stringify({model: model, response_format: {type: "json_object"}, messages: [{role: "system", content: system}, {role: "user", content: "Article from " + String(b.source || "").slice(0, 80) + " (" + String(b.url || "").slice(0, 300) + "):\n\n" + text}]})});
       if (!r.ok) { let why = ""; try { const e = await r.json(); why = String(e && e.error && (e.error.code || e.error.type || e.error.message) || "").slice(0, 120); } catch (_) {} lastError = model + " HTTP " + r.status + (why ? " (" + why + ")" : ""); continue; }
       const d = await r.json(), parsed = JSON.parse(d.choices[0].message.content);
-      const products = (Array.isArray(parsed.products) ? parsed.products : []).slice(0, 40).map(function (p) { return {brand: String(p.brand || "").trim().slice(0, 80), name: String(p.name || "").trim().slice(0, 160), label: String(p.label || "").trim().slice(0, 120), basis: ["tested", "owned", "editor_pick", "listed"].indexOf(p.basis) >= 0 ? p.basis : "listed", price: Number(p.price) > 0 && Number(p.price) < 100000 ? Number(p.price) : null, sponsored: p.sponsored === true, category: String(p.category || "").toLowerCase().slice(0, 20)}; }).filter(function (p) { return p.brand && p.name; });
+      const products = cleanProducts(parsed);
       return Response.json({ok: true, model: model, products: products, usage: d.usage || null});
     } catch (e) { lastError = model + " " + String(e && e.message || e).slice(0, 120); }
+  }
+  // Cloudflare's own model is the fallback, so extraction does not stop when the OpenAI account is out of credit.
+  if (env.AI) {
+    try {
+      const out = await env.AI.run(WORKERS_AI_MODEL, {max_tokens: 3000, messages: [{role: "system", content: system + " Reply with the JSON object only."}, {role: "user", content: "Article from " + String(b.source || "").slice(0, 80) + " (" + String(b.url || "").slice(0, 300) + "):\n\n" + text.slice(0, 40000)}]});
+      const raw = out && out.response != null ? out.response : out, parsed = typeof raw === "object" ? raw : JSON.parse((String(raw).match(/\{[\s\S]*\}/) || ["{}"])[0]);
+      return Response.json({ok: true, model: "workers-ai-llama-3.3", products: cleanProducts(parsed), fallbackFrom: lastError});
+    } catch (e) { lastError += "; workers-ai " + String(e && e.message || e).slice(0, 120); }
   }
   return Response.json({error: lastError}, {status: 502});
 }
