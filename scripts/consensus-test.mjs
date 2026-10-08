@@ -4,15 +4,15 @@ import {readFileSync} from "node:fs";
 import {fetchPage, mentions} from "./verify-sources.mjs";
 import {articleText, api, slugify} from "./extract-recommendations.mjs";
 
-const GENERIC = new Set(["the", "of", "and", "di", "del", "in", "for", "with", "balsamic", "vinegar", "aceto", "balsamico", "modena", "igp", "pgi", "dop", "extra", "virgin", "olive", "oil", "evoo", "organic", "original", "classic", "premium", "italian", "aged"]);
+const GENERIC = new Set(["the", "of", "and", "di", "del", "in", "for", "with", "balsamic", "vinegar", "aceto", "balsamico", "modena", "igp", "pgi", "dop", "extra", "virgin", "olive", "oil", "evoo", "organic", "original", "premium", "italian", "aged", "mattress", "mattresses", "bed"]);
+const ONLY = String(process.env.TOPIC || "").trim().toLowerCase();
 const compact = (v) => slugify(v).replace(/-/g, "");
 const distinct = (v) => slugify(v).split("-").filter((t) => t.length > 1 && !GENERIC.has(t));
 function same(a, b) {
   if (compact(a.brand) !== compact(b.brand)) return false;
   const x = distinct(a.name), y = distinct(b.name);
   if (!x.length || !y.length) return true;
-  const small = x.length <= y.length ? x : y, big = x.length <= y.length ? y : x;
-  return small.every((t) => big.includes(t));
+  return x.length === y.length && x.every((t) => y.includes(t));
 }
 
 async function main() {
@@ -23,7 +23,7 @@ async function main() {
     await new Promise((done) => setTimeout(done, 10000));
   }
   for (const topic of Object.keys(tests)) {
-    if (topic.startsWith("_")) continue;
+    if (topic.startsWith("_") || (ONLY && topic.toLowerCase() !== ONLY)) continue;
     const products = [], brands = new Map();
     let read = 0, blocked = 0, tested = 0, named = 0;
     console.log(`\n===== ${topic.toUpperCase()} =====`);

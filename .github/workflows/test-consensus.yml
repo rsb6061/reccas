@@ -3,6 +3,10 @@ name: Test consensus in another category
 # A private test: reads a few articles on one product question and prints how much they agree. Saves nothing.
 on:
   workflow_dispatch:
+    inputs:
+      topic:
+        description: "Which test to run (blank runs all)"
+        default: ""
 
 permissions:
   contents: read
@@ -31,4 +35,6 @@ jobs:
           echo "$KEY" | npx wrangler secret put VERIFY_KEY
           echo "VERIFY_KEY=$KEY" >> "$GITHUB_ENV"
       - name: Read the test articles and report agreement
+        env:
+          TOPIC: ${{ inputs.topic || '' }}
         run: node scripts/consensus-test.mjs

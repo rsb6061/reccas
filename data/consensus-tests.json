@@ -87,5 +87,51 @@
       "source": "Epicurious",
       "url": "https://www.epicurious.com/ingredients/the-absolute-best-extra-virgin-olive-oil-for-cooking-article"
     }
+  ],
+  "mattresses": [
+    {
+      "source": "Sleep Foundation",
+      "url": "https://www.sleepfoundation.org/best-mattress"
+    },
+    {
+      "source": "U.S. News 360 Reviews",
+      "url": "https://www.usnews.com/360-reviews/sleep/mattress"
+    },
+    {
+      "source": "Yahoo",
+      "url": "https://health.yahoo.com/wellness/sleep/mattresses/article/best-mattresses-000155774.html"
+    },
+    {
+      "source": "Tom's Guide",
+      "url": "https://www.tomsguide.com/mattresses/best-mattress"
+    },
+    {
+      "source": "CNN Underscored",
+      "url": "https://www.cnn.com/cnn-underscored/reviews/best-mattress"
+    },
+    {
+      "source": "Forbes Vetted",
+      "url": "https://www.forbes.com/sites/forbes-personal-shopper/article/best-mattresses/"
+    },
+    {
+      "source": "NCOA",
+      "url": "https://www.ncoa.org/product-resources/sleep/best-mattress/"
+    },
+    {
+      "source": "Sleepopolis",
+      "url": "https://sleepopolis.com/best-mattress/"
+    },
+    {
+      "source": "Mattress Nerd",
+      "url": "https://www.mattressnerd.com/best-mattress/"
+    },
+    {
+      "source": "Sleep Junkie",
+      "url": "https://www.sleepjunkie.com/best-mattresses/"
+    },
+    {
+      "source": "eachnight",
+      "url": "https://eachnight.com/mattress-guides/best-mattress/"
+    }
   ]
 }
