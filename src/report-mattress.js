@@ -1,9 +1,9 @@
 import {MATTRESS_REPORT as R} from "./mattress-report-data.js";
 
 // A standalone report: who recommends the "best mattresses", who pays them, and what is missing.
-// Every claim about a company links to the source it rests on. Unlinked from the site and hidden
-// from search until it has been reviewed (flip INDEXABLE to publish it).
-const INDEXABLE = false;
+// Every claim about a company links to the source it rests on. Published at its own address and in
+// the sitemap, but deliberately not linked from the menu, guides or categories.
+const INDEXABLE = true;
 const PATH = "/reports/mattress-guides";
 const SOURCES = {
   threeZ: "https://bedtimesmagazine.com/2023/03/3z-brands-acquires-leesa-sleep/",
@@ -81,3 +81,4 @@ export function createMattressReport(h) {
   };
 }
 export const MATTRESS_REPORT_PATH = PATH;
+export const MATTRESS_REPORT_INDEXABLE = INDEXABLE;

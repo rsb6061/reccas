@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,adminSyncPrices,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus,rematchCandidates} from "./consensus.js";
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
-import {createMattressReport,MATTRESS_REPORT_PATH} from "./report-mattress.js";
+import {createMattressReport,MATTRESS_REPORT_PATH,MATTRESS_REPORT_INDEXABLE} from "./report-mattress.js";
 import {createPeople,savePersonPicks,peopleStatus,peopleForProduct,peopleSitemap} from "./people.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe,myAlerts,removeMyAlert,createManage} from "./email.js";
 import {catalogExpansionTick,catalogExpansionStatus,refillCatalogIntent} from "./catalog-expansion.js";
@@ -561,6 +561,7 @@ async function staticPage(path){
 }
 async function sitemap(env){
   var entries=await pages.sitemapEntries(env);
+  if(MATTRESS_REPORT_INDEXABLE)entries.push({p:MATTRESS_REPORT_PATH,last:"2026-10-08"});
   var xml="<?xml version='1.0' encoding='UTF-8'?><urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"+entries.map(function(e){return "<url><loc>https://reccas.com"+esc(e.p)+"</loc>"+(e.last?"<lastmod>"+esc(String(e.last).slice(0,10))+"</lastmod>":"")+"</url>"}).join("")+"</urlset>";
   return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"public,max-age=3600"}});
 }
