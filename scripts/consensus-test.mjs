@@ -15,6 +15,11 @@ function same(a, b) {
   return x.length === y.length && x.every((t) => y.includes(t));
 }
 
+// The guide's own words about how it is paid, if it says.
+function disclosure(text) {
+  const m = String(text).replace(/\s+/g, " ").match(/[^.!?]{0,160}\b(earn|receive|get)s?\b[^.!?]{0,80}\b(commission|compensation|referral fee)[^.!?]{0,120}[.!?]|[^.!?]{0,120}\baffiliate (link|commission|partner)s?[^.!?]{0,120}[.!?]/i);
+  return m ? m[0].trim().slice(0, 300) : null;
+}
 async function main() {
   const tests = JSON.parse(readFileSync(new URL("../data/consensus-tests.json", import.meta.url), "utf8"));
   for (let attempt = 1; attempt <= 8; attempt++) {
@@ -24,7 +29,7 @@ async function main() {
   }
   for (const topic of Object.keys(tests)) {
     if (topic.startsWith("_") || (ONLY && topic.toLowerCase() !== ONLY)) continue;
-    const products = [], brands = new Map();
+    const products = [], brands = new Map(), full = [];
     let read = 0, blocked = 0, tested = 0, named = 0;
     console.log(`\n===== ${topic.toUpperCase()} =====`);
     for (const article of tests[topic]) {
@@ -37,6 +42,7 @@ async function main() {
       named += kept.length;
       tested += kept.filter((p) => p.basis === "tested").length;
       console.log(`  read: ${article.source} — ${kept.length} products (${ex.body.products.length - kept.length} dropped as unverifiable)`);
+      full.push({source: article.source, url: article.url, disclosure: disclosure(page.text), author: page.meta.author, modified: page.meta.modifiedAt || page.meta.publishedAt, products: kept.map((p) => ({brand: p.brand, name: p.name, label: p.label, price: p.price}))});
       const seenHere = new Set(), brandsHere = new Set();
       for (const p of kept) {
         let c = products.find((x) => same(x, p));
@@ -52,6 +58,7 @@ async function main() {
     console.log(`SUMMARY ${topic}: ${read} articles read, ${blocked} blocked, ${named} product mentions (${tested} tested), ${products.length} distinct products; named by 2+: ${at(2)}, by 3+: ${at(3)}, by 4+: ${at(4)}`);
     console.log("TOP PRODUCTS:");
     products.slice(0, 12).forEach((p) => console.log(`  ${p.sources.length}  ${p.brand} — ${p.name}  [${p.sources.join("; ")}]`));
+    console.log("FULLJSON " + JSON.stringify(full));
     console.log("TOP BRANDS:");
     brandList.slice(0, 12).forEach((b) => console.log(`  ${b.sources.length}  ${b.name}  [${b.sources.join("; ")}]`));
   }

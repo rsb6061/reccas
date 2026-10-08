@@ -132,6 +132,22 @@
     {
       "source": "eachnight",
       "url": "https://eachnight.com/mattress-guides/best-mattress/"
+    },
+    {
+      "source": "NapLab",
+      "url": "https://naplab.com/best-mattress/"
+    },
+    {
+      "source": "Consumer Reports",
+      "url": "https://www.consumerreports.org/home-garden/mattresses/best-mattresses-of-the-year-a1139830767/"
+    },
+    {
+      "source": "Good Housekeeping",
+      "url": "https://www.goodhousekeeping.com/home-products/g27336392/best-mattresses/"
+    },
+    {
+      "source": "The Strategist",
+      "url": "https://nymag.com/strategist/article/best-mattresses.html"
     }
   ]
 }
