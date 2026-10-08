@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import {createPages,getGuide,guideIndex,siteHeader,CONSENSUS_CSS,GUIDE_REDIRECTS,FRANCHISE_YEAR,subscribe,aiReferrer,logAiReferral,syncMentions,syncPrices,syncMentionsOncePerDay,applyReviewRules,snapshotProducts,adminSyncPrices,mentionsFeed,saveMentionChecks,signupPopup,extractProducts,saveCandidates,extractionStatus,rematchCandidates} from "./consensus.js";
 import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
+import {createMattressReport,MATTRESS_REPORT_PATH} from "./report-mattress.js";
 import {createPeople,savePersonPicks,peopleStatus,peopleForProduct,peopleSitemap} from "./people.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe,myAlerts,removeMyAlert,createManage} from "./email.js";
 import {catalogExpansionTick,catalogExpansionStatus,refillCatalogIntent} from "./catalog-expansion.js";
@@ -900,6 +901,7 @@ function machineResource(path){
 function faviconResponse(){var raw=atob(FAVICON_B64),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Response(bytes,{headers:{"content-type":"image/png","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}})}
 const pages=createPages({page:page,esc:esc,money:money,enrichStaticPick:resolvePick,trendingOn:function(env){return String(env&&env.TRENDING||"").toLowerCase()==="on"}});
 const unsubscribePage=createUnsubscribe({page:page,esc:esc});
+const mattressReport=createMattressReport({page:page,esc:esc});
 const managePage=createManage({page:page,esc:esc});
 const peoplePages=createPeople({page:page,esc:esc});
 
@@ -1014,6 +1016,7 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/most-recommended")return pages.mostRecommended(env);
   if(path==="/search")return pages.search(env,u.searchParams.get("q"),ctx);
   if(path==="/alerts")return pages.alerts(env);
+  if(path===MATTRESS_REPORT_PATH)return mattressReport();
   if(path==="/alerts/manage"&&(request.method==="GET"||request.method==="POST"))return managePage(request,env);
   if(path==="/_api/alerts/mine"&&request.method==="GET")return myAlerts(request,env,sessionUser);
   if(path==="/_api/alerts/remove"&&request.method==="POST")return removeMyAlert(request,env,sessionUser);
