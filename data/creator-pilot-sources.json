@@ -1,0 +1,247 @@
+{
+  "_about": "DISCOVERY CANDIDATES ONLY. Not verified active, independent, accessible or eligible. Never show as counted sources until evidence validation.",
+  "target": 100,
+  "window_days": 90,
+  "sources": [
+    {
+      "name": "Stacie Flinner",
+      "site": "https://stacieflinner.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Julia Berolzheimer",
+      "site": "https://juliaberolzheimer.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "The Stripe",
+      "site": "https://thestripe.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "9to5Chic",
+      "site": "https://9to5chic.com",
+      "style": "workwear",
+      "status": "candidate"
+    },
+    {
+      "name": "The Motherchic",
+      "site": "https://themotherchic.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "A Well Styled Life",
+      "site": "https://awellstyledlife.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "What Olivia Did",
+      "site": "https://whatoliviadid.com",
+      "style": "british",
+      "status": "candidate"
+    },
+    {
+      "name": "The Anna Edit",
+      "site": "https://theannaedit.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Cup of Jo",
+      "site": "https://cupofjo.com",
+      "style": "editorial",
+      "status": "candidate"
+    },
+    {
+      "name": "Kendi Everyday",
+      "site": "https://kendieveryday.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "The Mom Edit",
+      "site": "https://themomedit.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "YouLookFab",
+      "site": "https://youlookfab.com",
+      "style": "styling",
+      "status": "candidate"
+    },
+    {
+      "name": "Extra Petite",
+      "site": "https://extrapetite.com",
+      "style": "petite",
+      "status": "candidate"
+    },
+    {
+      "name": "Putting Me Together",
+      "site": "https://puttingmetogether.com",
+      "style": "capsule",
+      "status": "candidate"
+    },
+    {
+      "name": "Penny Pincher Fashion",
+      "site": "https://pennypincherfashion.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Atlantic-Pacific",
+      "site": "https://the-atlantic-pacific.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Style of Sam",
+      "site": "https://styleofsam.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "Fashion Jackson",
+      "site": "https://fashionjackson.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Hello Fashion",
+      "site": "https://hellofashionblog.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "The Fashion Guitar",
+      "site": "https://thefashionguitar.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Song of Style",
+      "site": "https://songofstyle.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Memorandum",
+      "site": "https://memorandum.com",
+      "style": "workwear",
+      "status": "candidate"
+    },
+    {
+      "name": "The Teacher Diva",
+      "site": "https://theteacherdiva.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "The Everygirl",
+      "site": "https://theeverygirl.com",
+      "style": "editorial",
+      "status": "candidate"
+    },
+    {
+      "name": "Poor Little It Girl",
+      "site": "https://poor-little-it-girl.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Living in Yellow",
+      "site": "https://livinginyellow.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "Crystalin Marie",
+      "site": "https://crystalinmarie.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Wardrobe Oxygen",
+      "site": "https://wardrobeoxygen.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "The Budget Babe",
+      "site": "https://thebudgetbabe.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Une Femme d'un Certain Age",
+      "site": "https://unefemme.net",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "The Curvy Fashionista",
+      "site": "https://thecurvyfashionista.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "Natalie Borton",
+      "site": "https://natalieborton.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Sincerely Jules",
+      "site": "https://sincerelyjules.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "The Chriselle Factor",
+      "site": "https://thechrisellefactor.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Brooklyn Blonde",
+      "site": "https://brooklynblonde.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Girl With Curves",
+      "site": "https://girlwithcurves.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "Style Charade",
+      "site": "https://stylecharade.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Caralyn Mirand",
+      "site": "https://caralynmirand.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "The Style Scribe",
+      "site": "https://thestylescribe.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Jess Ann Kirby",
+      "site": "https://jessannkirby.com",
+      "style": "sustainable",
+      "status": "candidate"
+    }
+  ]
+}
