@@ -118,7 +118,11 @@ export function createCreatorPilot(h) {
   async function categoryPage(env,slug){
     if(!category(slug))return null;
     const rows=await data(env),m=models(rows),c=m.cats[slug],brands=sums(c.brands),products=sums(c.products),sources=c.sources.size;
-    const panel=(title,items,min)=>"<section class='section'><h2>"+title+"</h2><div class='tablewrap'><table class='evidenceTable'><thead><tr><th>Name</th><th>Different creator sites</th><th>Original mentions</th></tr></thead><tbody>"+items.filter(x=>x.count>=min).slice(0,35).map(x=>"<tr><td><strong>"+esc(x.label)+"</strong></td><td>"+x.count+"</td><td>"+[...new Map(x.rows.map(r=>[r.source_slug,r])).values()].map(r=>"<a class='plainLink' href='"+outlink(r.url,slug)+"' target='_blank' rel='noopener noreferrer nofollow'>"+esc(r.source_name)+" ↗</a>").join(" · ")+"</td></tr>").join("")+"</tbody></table></div></section>";
+    const panel=(title,items,min)=>{
+      const qualified=items.filter(x=>x.count>=min).slice(0,35);
+      if(!qualified.length)return "";
+      return "<section class='section'><h2>"+title+"</h2><div class='tablewrap'><table class='evidenceTable'><thead><tr><th>Name</th><th>Different creator sites</th><th>Original mentions</th></tr></thead><tbody>"+qualified.map(x=>"<tr><td><strong>"+esc(x.label)+"</strong></td><td>"+x.count+"</td><td>"+[...new Map(x.rows.map(r=>[r.source_slug,r])).values()].map(r=>"<a class='plainLink' href='"+outlink(r.url,slug)+"' target='_blank' rel='noopener noreferrer nofollow'>"+esc(r.source_name)+" ↗</a>").join(" · ")+"</td></tr>").join("")+"</tbody></table></div></section>";
+    };
     const body="<main class='wrap'><section class='hero'><span class='eyebrow'>Creator shopping edits · last 90 days</span><h1>"+esc(CATEGORIES[slug])+" fashion creators recommend</h1><p>"+sources+" distinct creator sites and "+c.rows.length+" verified mentions. A brand mention is not an endorsement of every product it sells.</p>"+intro+"</section>"+panel("Brands with repeat recommendations",brands,2)+panel("Exact products with three or more sources",products,3)+"</main>";
     const indexable=sources>=5&&brands.some(x=>x.count>=3)&&products.some(x=>x.count>=3);
     return page("/creator-edits/"+slug,CATEGORIES[slug]+" Recommended by Fashion Creators",body,"Brand and exact-product recommendations across fashion creators, sourced to original recent articles.",200,indexable?null:"noindex, follow",{kind:"collection",breadcrumb:CATEGORIES[slug]});
