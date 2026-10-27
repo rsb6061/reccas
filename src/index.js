@@ -4,6 +4,7 @@ import {AGENT_TOOLS,agentCall,agentRest,openApi} from "./agent.js";
 import {createReview} from "./review.js";
 import {createMattressReport,MATTRESS_REPORT_PATH,MATTRESS_REPORT_INDEXABLE} from "./report-mattress.js";
 import {createPeople,savePersonPicks,peopleStatus,peopleForProduct,peopleSitemap} from "./people.js";
+import {createCreatorPilot,saveCreatorArticle,creatorPilotStatus,creatorPilotSummary,creatorPilotSitemap} from "./creator-pilot.js";
 import {confirmSignup,sendPriceDropAlerts,sendSaleDigest,createUnsubscribe,myAlerts,removeMyAlert,createManage} from "./email.js";
 import {catalogExpansionTick,catalogExpansionStatus,refillCatalogIntent} from "./catalog-expansion.js";
 const STATIC_COLLECTIONS = {
@@ -226,7 +227,7 @@ function page(path,title,body,desc,status,robots,extra){
   var head="<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>"+esc(fullTitle)+"</title><meta name='description' content='"+esc(description)+"'><meta name='robots' content='"+esc(robotText)+"'><meta name='googlebot' content='"+esc(robotText)+"'><meta name='application-name' content='Reccas'><meta name='theme-color' content='#f7f0e6'><link rel='canonical' href='"+esc(url)+"'><link rel='manifest' href='/manifest.json?v=20261007'><link rel='icon' type='image/png' sizes='128x128' href='"+icon+"'><link rel='shortcut icon' href='"+icon+"'><link rel='apple-touch-icon' href='"+icon+"'><meta property='og:site_name' content='Reccas'><meta property='og:type' content='"+ogType+"'><meta property='og:title' content='"+esc(fullTitle)+"'><meta property='og:description' content='"+esc(description)+"'><meta property='og:url' content='"+esc(url)+"'>"+(image?"<meta property='og:image' content='"+esc(image)+"'>":"")+"<meta name='twitter:card' content='"+(image?"summary_large_image":"summary")+"'><meta name='twitter:title' content='"+esc(fullTitle)+"'><meta name='twitter:description' content='"+esc(description)+"'>"+(image?"<meta name='twitter:image' content='"+esc(image)+"'>":"")+"<script type='application/ld+json'>"+schema+"</script><script type='text/javascript'>(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src='https://www.clarity.ms/tag/'+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y)})(window,document,'clarity','script','yu1hc4t3ym');</script><style>"+css+CONSENSUS_CSS+"</style></head><body>";
   var nav=siteHeader();
   var crumb=path!=="/"&&String(robotText).indexOf("noindex")<0?"<div class='breadcrumbs'><a href='/'>Reccas</a><span>›</span><span>"+esc(extra.breadcrumb||title)+"</span></div>":"";
-  var foot=signupPopup(path)+"<footer class='footer'><div class='footer-inner'><div><div class='footer-brand'>Reccas</div><div>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s fashion, then shows the products the most independent sources agree on.</div></div><nav class='footer-links'><a href='/recommendations'>Best of Fashion</a><a href='/most-recommended'>Most recommended</a><a href='/brands'>Brands</a><a href='/sources'>Sources</a><a href='/methodology'>Methodology</a><a href='/about'>About</a><a href='/privacy'>Privacy</a><a href='/llms.txt'>llms.txt</a></nav></div><div class='footer-inner' style='padding-top:0'><p class='footNote'>Reccas is independent. The publications, editors, stylists and creators named on this site are not affiliated with Reccas and have not endorsed it. Their names appear only to attribute recommendations they published, each linked to its source. Reccas may earn a commission from some shopping links, which never affects counts or rankings.</p></div></footer></body></html>";
+  var foot=signupPopup(path)+"<footer class='footer'><div class='footer-inner'><div><div class='footer-brand'>Reccas</div><div>Reccas tracks what fashion editors, stylists, creators and testers recommend in women’s fashion, then shows the products the most independent sources agree on.</div></div><nav class='footer-links'><a href='/recommendations'>Best of Fashion</a><a href='/most-recommended'>Most recommended</a><a href='/brands'>Brands</a><a href='/sources'>Sources</a><a href='/creators'>Creators</a><a href='/methodology'>Methodology</a><a href='/about'>About</a><a href='/privacy'>Privacy</a><a href='/llms.txt'>llms.txt</a></nav></div><div class='footer-inner' style='padding-top:0'><p class='footNote'>Reccas is independent. The publications, editors, stylists and creators named on this site are not affiliated with Reccas and have not endorsed it. Their names appear only to attribute recommendations they published, each linked to its source. Reccas may earn a commission from some shopping links, which never affects counts or rankings.</p></div></footer></body></html>";
   return new Response(head+nav+crumb+body+foot,{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":status===404?"no-store":"public, max-age=120","x-content-type-options":"nosniff","referrer-policy":"strict-origin-when-cross-origin"}});
 }
 async function one(db,sql){var args=[].slice.call(arguments,2),stmt=db.prepare(sql);if(args.length)stmt=stmt.bind.apply(stmt,args);return (await stmt.first())||null}
@@ -561,6 +562,7 @@ async function staticPage(path){
 }
 async function sitemap(env){
   var entries=await pages.sitemapEntries(env);
+  try{entries.push(...await creatorPilotSitemap(env))}catch(_){/* Keep sitemap available if pilot storage is unavailable. */}
   if(MATTRESS_REPORT_INDEXABLE)entries.push({p:MATTRESS_REPORT_PATH,last:"2026-10-08"});
   var xml="<?xml version='1.0' encoding='UTF-8'?><urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>"+entries.map(function(e){return "<url><loc>https://reccas.com"+esc(e.p)+"</loc>"+(e.last?"<lastmod>"+esc(String(e.last).slice(0,10))+"</lastmod>":"")+"</url>"}).join("")+"</urlset>";
   return new Response(xml,{headers:{"content-type":"application/xml; charset=utf-8","cache-control":"public,max-age=3600"}});
@@ -905,6 +907,7 @@ const unsubscribePage=createUnsubscribe({page:page,esc:esc});
 const mattressReport=createMattressReport({page:page,esc:esc});
 const managePage=createManage({page:page,esc:esc});
 const peoplePages=createPeople({page:page,esc:esc});
+const creatorPages=createCreatorPilot({page:page,esc:esc});
 
 function coverageIntentFromGuide(g){
   var t=String(g&&g.title||g&&g.slug||"").toLowerCase(),slug=String(g&&g.slug||"");
@@ -999,6 +1002,9 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(request.method==="GET"&&ctx){var aiRef=aiReferrer(request);if(aiRef)ctx.waitUntil(logAiReferral(env,aiRef,path))}
   if(path==="/_api/subscribe"&&request.method==="POST")return subscribe(request,env,ctx,confirmSignup);
   if(path==="/_api/mentions.json"&&request.method==="GET")return mentionsFeed(env);
+  if(path==="/_api/creator-pilot/summary"&&request.method==="GET")return Response.json(await creatorPilotSummary(env),{headers:{"Cache-Control":"no-store"}});
+  if(path==="/_api/admin/creator-pilot/ingest"&&request.method==="POST")return saveCreatorArticle(request,env);
+  if(path==="/_api/admin/creator-pilot/status"&&request.method==="GET")return creatorPilotStatus(request,env);
   if(path==="/_api/admin/mention-checks"&&request.method==="POST")return saveMentionChecks(request,env);
   if(path==="/_api/admin/extract"&&request.method==="POST")return extractProducts(request,env);
   if(path==="/_api/admin/candidates"&&request.method==="POST")return saveCandidates(request,env);
@@ -1021,6 +1027,9 @@ export default {async scheduled(event,env,ctx){ctx.waitUntil((async function(){v
   if(path==="/alerts/manage"&&(request.method==="GET"||request.method==="POST"))return managePage(request,env);
   if(path==="/_api/alerts/mine"&&request.method==="GET")return myAlerts(request,env,sessionUser);
   if(path==="/_api/alerts/remove"&&request.method==="POST")return removeMyAlert(request,env,sessionUser);
+  if(path==="/creators")return creatorPages.index(env);
+  if(path.indexOf("/creators/")===0){var cp=await creatorPages.source(env,path.slice(10));if(cp)return cp}
+  if(path.indexOf("/creator-edits/")===0){var ce=await creatorPages.categoryPage(env,path.slice(15));if(ce)return ce}
   if(path==="/people")return peoplePages.index(env);
   if(path.indexOf("/people/")===0){var pp=await peoplePages.person(env,path.slice(8));if(pp)return pp}
   if(path==="/brands")return pages.brandsPage(env);

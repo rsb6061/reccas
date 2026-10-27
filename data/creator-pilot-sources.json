@@ -1,0 +1,655 @@
+{
+  "_about": "DISCOVERY CANDIDATES ONLY. Sourced from public blogger directories and known creator sites; not yet verified active, independent, permitted for collection or eligible. Never show as counted sources until validated evidence.",
+  "target": 100,
+  "window_days": 90,
+  "sources": [
+    {
+      "name": "Stacie Flinner",
+      "site": "https://stacieflinner.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Julia Berolzheimer",
+      "site": "https://juliaberolzheimer.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "The Stripe",
+      "site": "https://thestripe.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "9to5Chic",
+      "site": "https://9to5chic.com",
+      "style": "workwear",
+      "status": "candidate"
+    },
+    {
+      "name": "The Motherchic",
+      "site": "https://themotherchic.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "A Well Styled Life",
+      "site": "https://awellstyledlife.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "What Olivia Did",
+      "site": "https://whatoliviadid.com",
+      "style": "british",
+      "status": "candidate"
+    },
+    {
+      "name": "The Anna Edit",
+      "site": "https://theannaedit.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Cup of Jo",
+      "site": "https://cupofjo.com",
+      "style": "editorial",
+      "status": "candidate"
+    },
+    {
+      "name": "Kendi Everyday",
+      "site": "https://kendieveryday.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "The Mom Edit",
+      "site": "https://themomedit.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "YouLookFab",
+      "site": "https://youlookfab.com",
+      "style": "styling",
+      "status": "candidate"
+    },
+    {
+      "name": "Extra Petite",
+      "site": "https://extrapetite.com",
+      "style": "petite",
+      "status": "candidate"
+    },
+    {
+      "name": "Putting Me Together",
+      "site": "https://puttingmetogether.com",
+      "style": "capsule",
+      "status": "candidate"
+    },
+    {
+      "name": "Penny Pincher Fashion",
+      "site": "https://pennypincherfashion.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Atlantic-Pacific",
+      "site": "https://the-atlantic-pacific.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Style of Sam",
+      "site": "https://styleofsam.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "Fashion Jackson",
+      "site": "https://fashionjackson.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Hello Fashion",
+      "site": "https://hellofashionblog.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "The Fashion Guitar",
+      "site": "https://thefashionguitar.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Song of Style",
+      "site": "https://songofstyle.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Memorandum",
+      "site": "https://memorandum.com",
+      "style": "workwear",
+      "status": "candidate"
+    },
+    {
+      "name": "The Teacher Diva",
+      "site": "https://theteacherdiva.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "The Everygirl",
+      "site": "https://theeverygirl.com",
+      "style": "editorial",
+      "status": "candidate"
+    },
+    {
+      "name": "Poor Little It Girl",
+      "site": "https://poor-little-it-girl.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Living in Yellow",
+      "site": "https://livinginyellow.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "Crystalin Marie",
+      "site": "https://crystalinmarie.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Wardrobe Oxygen",
+      "site": "https://wardrobeoxygen.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "The Budget Babe",
+      "site": "https://thebudgetbabe.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Une Femme d'un Certain Age",
+      "site": "https://unefemme.net",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "The Curvy Fashionista",
+      "site": "https://thecurvyfashionista.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "Natalie Borton",
+      "site": "https://natalieborton.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Sincerely Jules",
+      "site": "https://sincerelyjules.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "The Chriselle Factor",
+      "site": "https://thechrisellefactor.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Brooklyn Blonde",
+      "site": "https://brooklynblonde.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Girl With Curves",
+      "site": "https://girlwithcurves.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "Style Charade",
+      "site": "https://stylecharade.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Caralyn Mirand",
+      "site": "https://caralynmirand.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "The Style Scribe",
+      "site": "https://thestylescribe.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Jess Ann Kirby",
+      "site": "https://jessannkirby.com",
+      "style": "sustainable",
+      "status": "candidate"
+    },
+    {
+      "name": "Jo-Lynne Shane",
+      "site": "https://jolynneshane.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Midlifechic",
+      "site": "https://midlifechic.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "40+Style",
+      "site": "https://40plusstyle.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Fabulous After 40",
+      "site": "https://fabulousafter40.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Inside Out Style",
+      "site": "https://insideoutstyleblog.com",
+      "style": "styling",
+      "status": "candidate"
+    },
+    {
+      "name": "That's Not My Age",
+      "site": "https://thatsnotmyage.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Not Dressed as Lamb",
+      "site": "https://notdressedaslamb.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Style at a Certain Age",
+      "site": "https://styleatacertainage.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Busbee Style",
+      "site": "https://busbeestyle.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Cyndi Spivey",
+      "site": "https://cyndispivey.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Notes From a Stylist",
+      "site": "https://notesfromastylist.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "50 Is Not Old",
+      "site": "https://50isnotold.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Over 50 Feeling 40",
+      "site": "https://over50feeling40.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "No Fear of Fashion",
+      "site": "https://nofearoffashion.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Chic Everywhere",
+      "site": "https://chiceverywhere.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Is This Mutton",
+      "site": "https://isthismutton.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "My Midlife Fashion",
+      "site": "https://mymidlifefashion.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Dressed for My Day",
+      "site": "https://dressedformyday.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "So Heather",
+      "site": "https://soheather.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Beauticurve",
+      "site": "https://beauticurve.com",
+      "style": "size-inclusive",
+      "status": "candidate"
+    },
+    {
+      "name": "Jodie's Touch of Style",
+      "site": "https://jtouchofstyle.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Chic Over 50",
+      "site": "https://chicover50.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "The Midlife Fashionista",
+      "site": "https://themidlifefashionista.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "In the Groove",
+      "site": "https://getinthegroove.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Susan After 60",
+      "site": "https://susanafter60.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Lifestyle Fifty",
+      "site": "https://lifestylefifty.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Cindy Hattersley Design",
+      "site": "https://cindyhattersleydesign.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "The Middle Page",
+      "site": "https://the-middlepage.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Tanya Foster",
+      "site": "https://tanyafoster.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Hi Sugarplum",
+      "site": "https://hisugarplum.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "SoSusie",
+      "site": "https://sosusie.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Closet Choreography",
+      "site": "https://closetchoreography.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "The Well Dressed Life",
+      "site": "https://thewelldressedlife.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Fashion Should Be Fun",
+      "site": "https://fashionshouldbefun.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "B&B Blog",
+      "site": "https://bandbblog.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Fashionista Over 40",
+      "site": "https://fashionistaover40.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Color and Grace",
+      "site": "https://colorandgrace.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Sharing a Journey",
+      "site": "https://sharingajourney.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Fifty and Fab",
+      "site": "https://fiftyandfab.co.uk",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Fake Fabulous",
+      "site": "https://fakefabulous.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "SAS for Short",
+      "site": "https://sasforshort.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "J. Cathell",
+      "site": "https://jcathell.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Karina Style Diaries",
+      "site": "https://karinastylediaries.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "SheShe Show",
+      "site": "https://shesheshow.com",
+      "style": "over-40",
+      "status": "candidate"
+    },
+    {
+      "name": "Chic50Style",
+      "site": "https://chic50style.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Senior Style Bible",
+      "site": "https://seniorstylebible.com",
+      "style": "over-50",
+      "status": "candidate"
+    },
+    {
+      "name": "Breonna Queen",
+      "site": "https://breonnaqueen.com",
+      "style": "personal-style",
+      "status": "candidate"
+    },
+    {
+      "name": "Style Your Occasion",
+      "site": "https://styleyouroccasion.com",
+      "style": "occasion",
+      "status": "candidate"
+    },
+    {
+      "name": "My Chic Obsession",
+      "site": "https://mychicobsession.com",
+      "style": "minimal",
+      "status": "candidate"
+    },
+    {
+      "name": "Autum Love",
+      "site": "https://autumlove.com",
+      "style": "styling",
+      "status": "candidate"
+    },
+    {
+      "name": "In the Frow",
+      "site": "https://inthefrow.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Mia Mia Mine",
+      "site": "https://miamiamine.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Glamour and Gains",
+      "site": "https://glamourandgains.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Lombard and Fifth",
+      "site": "https://lombardandfifth.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Monroe Steele",
+      "site": "https://fashionsteelenyc.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Wendy's Lookbook",
+      "site": "https://wendyslookbook.com",
+      "style": "luxury",
+      "status": "candidate"
+    },
+    {
+      "name": "Glamazon Diaries",
+      "site": "https://glamazondiaries.com",
+      "style": "personal-style",
+      "status": "candidate"
+    },
+    {
+      "name": "Corporette",
+      "site": "https://corporette.com",
+      "style": "workwear",
+      "status": "candidate"
+    },
+    {
+      "name": "Pumps & Push Ups",
+      "site": "https://pumpsandpushups.com",
+      "style": "petite",
+      "status": "candidate"
+    },
+    {
+      "name": "Merrick's Art",
+      "site": "https://merricksart.com",
+      "style": "everyday",
+      "status": "candidate"
+    },
+    {
+      "name": "Kelly in the City",
+      "site": "https://kellyinthecity.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Fashionable Hostess",
+      "site": "https://fashionablehostess.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Southern Curls & Pearls",
+      "site": "https://southerncurlsandpearls.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "The Real Fashionista",
+      "site": "https://therealfashionista.com",
+      "style": "affordable",
+      "status": "candidate"
+    },
+    {
+      "name": "Chic Pursuit",
+      "site": "https://chicpursuit.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Style Blueprint",
+      "site": "https://styleblueprint.com",
+      "style": "editorial",
+      "status": "candidate"
+    },
+    {
+      "name": "Natalie Yerger",
+      "site": "https://natalieyerger.com",
+      "style": "classic",
+      "status": "candidate"
+    },
+    {
+      "name": "Style by Emily Henderson",
+      "site": "https://stylebyemilyhenderson.com",
+      "style": "lifestyle",
+      "status": "candidate"
+    }
+  ]
+}
