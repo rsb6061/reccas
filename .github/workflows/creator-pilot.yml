@@ -36,6 +36,7 @@ jobs:
       - run: npm ci
       - name: Validate source scripts and Worker module
         run: |
+          node scripts/creator-pilot-validate.mjs
           node --check src/creator-pilot.js
           node --check scripts/creator-pilot-discover.mjs
           node --check scripts/creator-pilot-extract.mjs
