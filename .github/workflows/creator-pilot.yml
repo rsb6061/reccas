@@ -12,7 +12,7 @@ on:
     inputs:
       article_limit:
         description: "Maximum eligible shopping articles to extract"
-        default: "24"
+        default: "80"
         required: false
   schedule:
     - cron: "13 10 * * 2"
@@ -67,7 +67,7 @@ jobs:
       - name: Extract and store recent creator recommendations
         run: node scripts/creator-pilot-extract.mjs
         env:
-          LIMIT: ${{ inputs.article_limit || '24' }}
+          LIMIT: ${{ inputs.article_limit || '80' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
