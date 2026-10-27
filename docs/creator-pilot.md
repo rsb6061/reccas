@@ -5,7 +5,7 @@
 - `data/creator-pilot-sources.json` contains **108 unverified discovery candidates**. Neither the candidate count nor a matching RSS title is evidence of a recommendation.
 - `scripts/creator-pilot-discover.mjs` checks public RSS/Atom feeds for shopping articles published in the prior 90 days and saves `reports/creator-pilot.json`.
 - `scripts/creator-pilot-extract.mjs` reads those article URLs, checks source robots rules, validates publication date and plain-text mention evidence, calls existing Worker AI extract service with `creator:true`, and writes accepted rows to isolated D1 `creator_pilot_articles` and `creator_pilot_picks`. It never modifies main Best of Fashion rankings.
-- `.github/workflows/creator-pilot.yml` runs weekly and on merge of pilot files to `main`; 24 eligible article fetches per default run. Run manually to increase the article limit. Source discovery covers all 108 candidates by default.
+- `.github/workflows/creator-pilot.yml` runs weekly and on merge of pilot files to `main`; 80 eligible article fetches per default run, sampled one per site first. Run manually to increase the article limit. Source discovery covers all 108 candidates by default.
 - Metadata records original article URL, source site, date, brand, exact product name, category, retailer when stated, sponsorship flag, verification status, model and scan date. It does not copy creator photos.
 
 ## Public pages and thresholds
