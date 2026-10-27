@@ -88,6 +88,17 @@ export async function creatorPilotSummary(env) {
 }
 function outlink(url,where){return "/_api/out?to="+encodeURIComponent(url)+"&amp;edit="+encodeURIComponent("creator-pilot:"+where);}
 const intro="<p class='muted'>Only dated, explicitly stated product recommendations verified against a source article are included. Distinct sites are not necessarily independent ownership groups. Product and brand overlap are shown separately; sponsored picks are excluded. Reccas is not affiliated with these creators.</p>";
+export async function creatorPilotSitemap(env) {
+  const rows=await data(env),m=models(rows),out=[],today=TODAY();
+  if (m.creators.size>=10) out.push({p:"/creators",last:today});
+  for(const [slug,p] of m.creators){
+    if(p.urls.size>=2&&new Set(p.picks.map(r=>r.product_key)).size>=5)out.push({p:"/creators/"+slug,last:today});
+  }
+  for(const [slug,c] of Object.entries(m.cats)){
+    if(c.sources.size>=5&&sums(c.brands).some(x=>x.count>=3)&&sums(c.products).some(x=>x.count>=3))out.push({p:"/creator-edits/"+slug,last:today});
+  }
+  return out;
+}
 export function createCreatorPilot(h) {
   const {page,esc}=h;
   async function index(env){
