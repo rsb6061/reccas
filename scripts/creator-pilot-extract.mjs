@@ -5,8 +5,8 @@ import {fetchPage,mentions,visibleText} from "./verify-sources.mjs";
 import {articleText,api,slugify} from "./extract-recommendations.mjs";
 
 const SITE=process.env.RECCAS_SITE||"https://reccas.com";
-const LIMIT=Number(process.env.LIMIT||24);
-const MAX_PER_SOURCE=Number(process.env.MAX_PER_SOURCE||3);
+const LIMIT=Number(process.env.LIMIT||80);
+const MAX_PER_SOURCE=Number(process.env.MAX_PER_SOURCE||2);
 const today=new Date().toISOString().slice(0,10);
 const cutoff=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
 const CATEGORIES=new Set(["coats","knitwear","denim","boots","bags","dresses","shoes","tailoring"]);
@@ -39,12 +39,16 @@ function robotsDenied(robots,path){
   }
   return blocked.some(x=>x==="/"||path.startsWith(x));
 }
-const sorted=(report.sources||[]).filter(s=>s.status==="recent_candidate").sort((a,b)=>b.articles.length-a.articles.length);
-const todo=[];for(const source of sorted)for(const art of source.articles.slice(0,MAX_PER_SOURCE)){
-  if(todo.length>=LIMIT)break;
+const sorted=(report.sources||[]).filter(s=>s.status==="recent_candidate"&&!s.ingest_blocked).sort((a,b)=>a.name.localeCompare(b.name));
+// Sample one article per distinct site before second articles from any site.
+const todo=[];
+outer: for(let round=0;round<MAX_PER_SOURCE;round++)for(const source of sorted){
+  const art=source.articles[round];
+  if(!art)continue;
   if(allUrls.has(art.url))continue;allUrls.add(art.url);
   if(recent.has(art.url)){stats.skipped_recent++;continue}
   todo.push({source,article:art});
+  if(todo.length>=LIMIT)break outer;
 }
 const robotsCache=new Map();
 for(const {source,article} of todo) {

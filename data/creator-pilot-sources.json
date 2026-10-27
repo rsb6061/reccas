@@ -7,7 +7,14 @@
       "name": "Stacie Flinner",
       "site": "https://stacieflinner.com",
       "style": "classic",
-      "status": "candidate"
+      "status": "candidate",
+      "pinned_articles": [
+        {
+          "url": "https://stacieflinner.com/the-coats-youll-reach-for-all-season-2/",
+          "title": "The Coats You'll Reach For All Season",
+          "date": "2026-10-27"
+        }
+      ]
     },
     {
       "name": "Julia Berolzheimer",
@@ -247,7 +254,9 @@
       "name": "Jo-Lynne Shane",
       "site": "https://jolynneshane.com",
       "style": "over-40",
-      "status": "candidate"
+      "status": "candidate",
+      "ingest_blocked": true,
+      "blocked_reason": "Original article URLs were inaccessible during the initial October 27 2026 verification run. Do not retry until access is reviewed."
     },
     {
       "name": "Midlifechic",
@@ -271,7 +280,9 @@
       "name": "Inside Out Style",
       "site": "https://insideoutstyleblog.com",
       "style": "styling",
-      "status": "candidate"
+      "status": "candidate",
+      "ingest_blocked": true,
+      "blocked_reason": "Original article URLs were inaccessible during the initial October 27 2026 verification run. Do not retry until access is reviewed."
     },
     {
       "name": "That's Not My Age",
@@ -289,7 +300,9 @@
       "name": "Style at a Certain Age",
       "site": "https://styleatacertainage.com",
       "style": "over-50",
-      "status": "candidate"
+      "status": "candidate",
+      "ingest_blocked": true,
+      "blocked_reason": "Original article URLs were inaccessible during the initial October 27 2026 verification run. Do not retry until access is reviewed."
     },
     {
       "name": "Busbee Style",
